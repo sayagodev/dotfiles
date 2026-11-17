@@ -4,3 +4,10 @@
 
 # Estado local, nunca en el repo
 .dotfiles-backup/
+
+# Binarios de la TUI (se compilan en ~/.local/share/dotfiles/bin)
+tui/dotfiles-tui
+tui/bin/
+
+# Estado que fcitx5 escribe a través del symlink
+overlay/.config/fcitx5/conf/cached_layouts

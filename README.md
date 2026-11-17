@@ -4,7 +4,38 @@ Configuración personal encima de [ML4W](https://github.com/mylinuxforwork/dotfi
 No es un fork: ML4W sigue siendo ML4W y este repo solo añade lo tuyo,
 de forma idempotente y sobreviviendo a sus actualizaciones.
 
-## Instalación en una máquina nueva
+## Instalación interactiva (recomendada)
+
+```bash
+./setup.sh
+```
+
+Arranca una TUI (Go + [bubbletea/bubbles](https://github.com/charmbracelet/bubbles))
+donde marcas qué aplicar en esta pasada: config, overrides, host, paquetes
+oficiales, AUR, flatpak, herramientas, servicios y Neovim. Tiene toggle de
+**dry-run**, selección recomendada y al aplicar ejecuta
+`install.sh --only <selección>`: la TUI no reimplementa nada.
+
+La primera vez:
+
+1. Detecta Go. Si no está, descarga la **última estable** desde `go.dev`,
+   verifica su sha256 y la extrae en `~/.local/share/dotfiles/go` (sin sudo).
+2. Compila `tui/` en `~/.local/share/dotfiles/bin/dotfiles-tui`.
+3. Usa [gum](https://github.com/charmbracelet/gum) para confirmaciones y
+   spinners si está disponible (ya viene en `packages/native.txt`).
+
+Opciones:
+
+```bash
+./setup.sh --list       # estado por categoría, sin TUI ni TTY
+./setup.sh --rebuild    # fuerza recompilar la TUI
+./setup.sh --classic    # install.sh de siempre (acepta sus flags)
+```
+
+Sin terminal interactiva, `setup.sh` cae solo a `install.sh`. La compilación
+necesita red la primera vez (Go + módulos); el binario queda cacheado.
+
+## Instalación en una máquina nueva (modo clásico)
 
 ```bash
 # 1. Arch base + tu kernel/drivers + yay
@@ -88,6 +119,9 @@ Regla al añadir algo nuevo:
 - `--system`: habilita los 17 servicios de `system/services.txt`, añade
   los 6 grupos de `system/groups.txt` y las 3 unidades de usuario.
 - `--nvim`: clona `git@github.com:sayagodev/nvim.git` si no existe.
+- `--only links,overrides,host,…`: ejecuta solo esas categorías. Es lo que
+  usa la TUI. Válidas: `links`, `overrides`, `host`, `native`, `aur`,
+  `flatpak`, `tools`, `system`, `nvim` (y el alias `packages`).
 - `--all`: todo lo anterior. `--dry-run` no escribe nada.
 
 ### Copias de seguridad
@@ -103,7 +137,10 @@ Regla al añadir algo nuevo:
 ## Estructura
 
 ```
-install.sh                  instalador idempotente con colores y resumen
+setup.sh                    arranque interactivo: Go + build + TUI
+install.sh                  motor idempotente con colores y resumen
+tui/                        TUI en Go (bubbletea + bubbles + lipgloss)
+lib/manifest.sh             fuente única de las rutas que se gestionan
 overlay/                    espejo de $HOME; se enlaza con symlinks
   .bash_profile             source de .bashrc + bun
   .bashrc_custom            ble-attach final (debe cargarse el último)
@@ -126,8 +163,9 @@ hosts/<hostname>/           monitores y paquetes de hardware
 packages/                   native / aur / flatpak (generados)
 system/                     servicios, grupos, unidades de usuario
 scripts/
-  check.sh                  bash -n, luac, jq, shellcheck
+  check.sh                  bash -n, luac, jq, shellcheck, gofmt, go vet
   check-drift.sh            ¿cambió upstream lo que overrideo?
+  status.sh                 estado por categoría (lo usa la TUI)
   snapshot.sh               regenera listas y detecta overrides tocados
 bootstrap/tools.sh          oh-my-posh, nvm y avisos de binarios
 ```

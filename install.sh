@@ -14,6 +14,8 @@
 #    ./install.sh --system        # habilita servicios y grupos
 #    ./install.sh --nvim          # clona tu repo de Neovim
 #    ./install.sh --all           # todo lo anterior
+#    ./install.sh --only links,overrides
+#                                 # solo esas categorías (lo usa la TUI)
 #
 #  Salida: azul = información, verde = ok, amarillo = aviso,
 #  rojo = fallo (con pista de cómo arreglarlo). Al final hay un
@@ -32,6 +34,7 @@ DO_PACKAGES=0
 DO_TOOLS=0
 DO_SYSTEM=0
 DO_NVIM=0
+ONLY=""
 
 usage() {
     awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"
@@ -45,6 +48,10 @@ while (($#)); do
         --system) DO_SYSTEM=1 ;;
         --nvim) DO_NVIM=1 ;;
         --all) DO_PACKAGES=1; DO_TOOLS=1; DO_SYSTEM=1; DO_NVIM=1 ;;
+        --only)
+            [[ -n ${2:-} ]] || { echo "--only necesita una lista (ej: links,overrides)" >&2; exit 2; }
+            ONLY="$2"; shift ;;
+        --only=*) ONLY="${1#*=}" ;;
         -h|--help) usage; exit 0 ;;
         *)
             echo "Opción desconocida: $1 (usa --help)" >&2
@@ -315,67 +322,17 @@ blacklist_add() {
 }
 
 # -------------------------------------------------------------
-# Listas declarativas
+# Listas declarativas (una sola fuente de verdad: lib/manifest.sh)
 # -------------------------------------------------------------
-LINKED=(
-    ".bash_profile"
-    ".bashrc_custom"
-    ".blerc"
-    ".config/bashrc-custom"
-    ".config/bashrc/custom/00-init"
-    ".config/hypr/custom.lua"
-    ".config/hypr/scripts/skills-menu.sh"
-    ".config/ml4w/scripts/ml4w-toggle-no-suspend"
-    ".config/ml4w/wallpapers/shobun.jpg"
-    ".config/tmux"
-    ".config/fcitx5"
-    ".config/kanata"
-    ".config/environment.d/10-fcitx.conf"
-    ".config/autostart/gpu-screen-recorder-ui.desktop"
-    ".config/systemd/user/wayscriber.service"
-)
-
-# Symlinks que viven DENTRO del árbol de ML4W: hay que marcarlos en su
-# blacklist para que un update no los reemplace por los de upstream.
-TREE_LINKS=(
-    ".config/bashrc/custom/00-init"
-    ".config/hypr/custom.lua"
-    ".config/hypr/scripts/skills-menu.sh"
-    ".config/ml4w/scripts/ml4w-toggle-no-suspend"
-    ".config/ml4w/wallpapers/shobun.jpg"
-)
-
-# Overrides que sustituyen ficheros del árbol de ML4W (van a su blacklist).
-TREE_OVERRIDES=(
-    "hypr/hypridle.conf"
-    "hypr/conf/keybindings/default.lua"
-    "hypr/conf/decorations/default.lua"
-    "hypr/conf/window.lua"
-    "ohmyposh/zen.toml"
-    "kitty/kitty.conf"
-    "quickshell/SidebarApp/SidebarWindow.qml"
-    # Preferencias del escritorio (las escribe la app de ML4W)
-    "ml4w/settings/launcher"
-    "ml4w/settings/statusbar"
-    "ml4w/settings/wallpaper-app"
-    "ml4w/settings/browser.sh"
-    "ml4w/settings/filemanager"
-    "ml4w/settings/terminal.sh"
-    "ml4w/settings/editor.sh"
-    "ml4w/settings/dock-disabled"
-    "ml4w/settings/waybar-disabled"
-)
-
-# Ficheros propios fuera del árbol de ML4W.
-OVERRIDES=(
-    "${TREE_OVERRIDES[@]}"
-    "mimeapps.list"
-)
+MANIFEST="$DOTFILES_DIR/lib/manifest.sh"
+if [[ ! -f $MANIFEST ]]; then
+    printf '%s✘ falta lib/manifest.sh%s\n' "$C_RED" "$C_RESET" >&2
+    exit 2
+fi
+# shellcheck source=lib/manifest.sh
+source "$MANIFEST"
 
 HOST="${DOTFILES_HOST:-$(cat /etc/hostname 2>/dev/null || uname -n)}"
-HOST_FILES=(
-    "hypr/monitors.lua"
-)
 
 # -------------------------------------------------------------
 # Sistema de ficheros: enlaces
@@ -461,8 +418,8 @@ do_host() {
 # -------------------------------------------------------------
 # Paquetes
 # -------------------------------------------------------------
-do_packages() {
-    step "Paquetes"
+do_native() {
+    step "Paquetes oficiales"
 
     if ! have pacman; then
         fail "pacman no está disponible" "Este repo asume Arch Linux"
@@ -484,26 +441,7 @@ do_packages() {
         warn "packages/native.txt vacío; ejecuta ./scripts/snapshot.sh"
     fi
 
-    if [[ -s $DOTFILES_DIR/packages/aur.txt ]]; then
-        local aur
-        aur="$(tr '\n' ' ' <"$DOTFILES_DIR/packages/aur.txt")"
-        local helper=""
-        have yay && helper=yay
-        [[ -z $helper ]] && have paru && helper=paru
-
-        if [[ -z $helper ]]; then
-            fail "no hay helper de AUR (yay/paru)" \
-                "Instala uno: sudo pacman -S --needed base-devel git && git clone https://aur.archlinux.org/yay-bin.git && cd yay-bin && makepkg -si"
-        elif ((DRY_RUN)); then
-            info "[dry-run] $helper -S --needed $(wc -l <"$DOTFILES_DIR/packages/aur.txt") paquetes AUR"
-        elif "$helper" -S --needed --noconfirm $aur >>"$LOG_FILE" 2>&1; then
-            ok "paquetes AUR"
-        else
-            fail "algunos paquetes AUR fallaron" \
-                "Revisa el log: $LOG_FILE  ·  reintenta: $helper -S --needed $(printf '%s' "$aur" | cut -c1-60)…"
-        fi
-    fi
-
+    # Los paquetes de hardware del host son pacman, van con los oficiales.
     local host_pkgs="$DOTFILES_DIR/hosts/$HOST/packages.txt"
     if [[ -s $host_pkgs ]]; then
         local hp
@@ -517,18 +455,55 @@ do_packages() {
                 "Revisa hosts/$HOST/packages.txt y el log: $LOG_FILE"
         fi
     fi
+}
 
-    if [[ -s $DOTFILES_DIR/packages/flatpak.txt ]] && have flatpak; then
-        local fps
-        fps="$(tr '\n' ' ' <"$DOTFILES_DIR/packages/flatpak.txt")"
-        if ((DRY_RUN)); then
-            info "[dry-run] flatpak install $(wc -l <"$DOTFILES_DIR/packages/flatpak.txt") apps"
-        elif flatpak install -y --noninteractive $fps >>"$LOG_FILE" 2>&1; then
-            ok "apps flatpak"
-        else
-            fail "algunas apps flatpak fallaron" \
-                "Ejecuta: flatpak install $fps"
-        fi
+do_aur() {
+    step "Paquetes AUR"
+
+    if [[ ! -s $DOTFILES_DIR/packages/aur.txt ]]; then
+        warn "packages/aur.txt vacío; ejecuta ./scripts/snapshot.sh"
+        return
+    fi
+
+    local aur helper=""
+    aur="$(tr '\n' ' ' <"$DOTFILES_DIR/packages/aur.txt")"
+    have yay && helper=yay
+    [[ -z $helper ]] && have paru && helper=paru
+
+    if [[ -z $helper ]]; then
+        fail "no hay helper de AUR (yay/paru)" \
+            "Instala uno: sudo pacman -S --needed base-devel git && git clone https://aur.archlinux.org/yay-bin.git && cd yay-bin && makepkg -si"
+    elif ((DRY_RUN)); then
+        info "[dry-run] $helper -S --needed $(wc -l <"$DOTFILES_DIR/packages/aur.txt") paquetes AUR"
+    elif "$helper" -S --needed --noconfirm $aur >>"$LOG_FILE" 2>&1; then
+        ok "paquetes AUR"
+    else
+        fail "algunos paquetes AUR fallaron" \
+            "Revisa el log: $LOG_FILE  ·  reintenta: $helper -S --needed $(printf '%s' "$aur" | cut -c1-60)…"
+    fi
+}
+
+do_flatpak() {
+    step "Flatpak"
+
+    if ! have flatpak; then
+        warn "flatpak no está instalado; se omite"
+        return
+    fi
+    if [[ ! -s $DOTFILES_DIR/packages/flatpak.txt ]]; then
+        warn "packages/flatpak.txt vacío; ejecuta ./scripts/snapshot.sh"
+        return
+    fi
+
+    local fps
+    fps="$(tr '\n' ' ' <"$DOTFILES_DIR/packages/flatpak.txt")"
+    if ((DRY_RUN)); then
+        info "[dry-run] flatpak install $(wc -l <"$DOTFILES_DIR/packages/flatpak.txt") apps"
+    elif flatpak install -y --noninteractive $fps >>"$LOG_FILE" 2>&1; then
+        ok "apps flatpak"
+    else
+        fail "algunas apps flatpak fallaron" \
+            "Ejecuta: flatpak install $fps"
     fi
 }
 
@@ -732,19 +707,60 @@ summary() {
 # -------------------------------------------------------------
 # Main
 # -------------------------------------------------------------
+# should_run <categoría>
+#   Sin --only: las categorías de config siempre; el resto según su flag.
+#   Con --only: solo las listadas.
+should_run() {
+    local key="$1"
+    if [[ -n $ONLY ]]; then
+        [[ ",$ONLY," == *",$key,"* ]]
+        return
+    fi
+    case "$key" in
+        links|overrides|host) return 0 ;;
+        native|aur|flatpak) ((DO_PACKAGES)) ;;
+        tools) ((DO_TOOLS)) ;;
+        system) ((DO_SYSTEM)) ;;
+        nvim) ((DO_NVIM)) ;;
+        *) return 1 ;;
+    esac
+}
+
+validate_only() {
+    [[ -z $ONLY ]] && return 0
+    ONLY="${ONLY// /}" # tolera "links, overrides"
+    # Alias cómodo: packages = native,aur,flatpak
+    ONLY="${ONLY//packages/native,aur,flatpak}"
+    local key valid=",links,overrides,host,native,aur,flatpak,tools,system,nvim,"
+    local IFS=,
+    for key in $ONLY; do
+        [[ -z $key ]] && continue
+        if [[ $valid != *",$key,"* ]]; then
+            fail "categoría desconocida en --only: $key" \
+                "Válidas: links, overrides, host, native, aur, flatpak, tools, system, nvim (o packages)"
+            return 1
+        fi
+    done
+    return 0
+}
+
 main() {
     printf '%s╭──────────────────────────────────────────────╮%s\n' "$C_BLUE" "$C_RESET"
     printf '%s│  dotfiles overlay para ML4W                   │%s\n' "$C_BLUE" "$C_RESET"
     printf '%s╰──────────────────────────────────────────────╯%s\n' "$C_BLUE" "$C_RESET"
 
     preflight
-    do_links
-    do_overrides
-    do_host
-    ((DO_PACKAGES)) && do_packages
-    ((DO_TOOLS)) && do_tools
-    ((DO_SYSTEM)) && do_system
-    ((DO_NVIM)) && do_nvim
+    validate_only
+
+    should_run links && do_links
+    should_run overrides && do_overrides
+    should_run host && do_host
+    should_run native && do_native
+    should_run aur && do_aur
+    should_run flatpak && do_flatpak
+    should_run tools && do_tools
+    should_run system && do_system
+    should_run nvim && do_nvim
 
     summary
 }

@@ -32,10 +32,13 @@ check() {
 printf '%s━━ Sintaxis bash %s\n' "$B" "$N"
 BASH_FILES=(
     "install.sh"
+    "setup.sh"
     "bootstrap/tools.sh"
+    "lib/manifest.sh"
     "scripts/check.sh"
     "scripts/check-drift.sh"
     "scripts/snapshot.sh"
+    "scripts/status.sh"
     "overlay/.bash_profile"
     "overlay/.bashrc_custom"
     "overlay/.blerc"
@@ -78,6 +81,18 @@ if command -v shellcheck >/dev/null 2>&1; then
     done
 else
     printf '  %s!%s shellcheck no instalado; se omite (sudo pacman -S shellcheck)\n' "$Y" "$N"
+fi
+
+printf '%s━━ Go (TUI) %s\n' "$B" "$N"
+GO_BIN="$(command -v go 2>/dev/null || true)"
+GO_DATA="${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/go/current/bin/go"
+[[ -z $GO_BIN && -x $GO_DATA ]] && GO_BIN="$GO_DATA"
+if [[ -n $GO_BIN ]]; then
+    GOFMT="$(dirname "$GO_BIN")/gofmt"
+    check "gofmt tui/ (sin cambios)" bash -c 'out=$("$1" -l tui); [[ -z $out ]] || { printf "%s\n" "$out"; exit 1; }' _ "$GOFMT"
+    check "go vet ./..." bash -c 'cd tui && "$1" vet ./...' _ "$GO_BIN"
+else
+    printf '  %s!%s Go no instalado; se omite (lo instala ./setup.sh)\n' "$Y" "$N"
 fi
 
 printf '\n'
