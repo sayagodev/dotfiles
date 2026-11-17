@@ -1,0 +1,31 @@
+(defcfg
+  process-unmapped-keys yes
+)
+
+(defsrc
+  caps h j k l u i o p n m bspc
+  a
+)
+
+(defvar
+  tap-time 200
+  hold-time 200
+)
+
+(defalias
+  cap_fn (tap-hold $tap-time $hold-time esc (layer-toggle fn))
+  a_mod (tap-hold $tap-time $hold-time a ralt)
+  
+  dbk (macro (C-S-left) bspc)
+  dfw (macro (C-S-right) del)
+)
+
+(deflayer base
+ @cap_fn h j k l u i o p n m bspc
+ @a_mod
+)
+
+(deflayer fn
+  _    left down up right home pgdn pgup end @dbk @dfw C-b
+  _
+)

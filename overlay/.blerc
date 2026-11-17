@@ -1,0 +1,23 @@
+# -*- mode: sh -*-
+# ~/.blerc — config mínima de ble.sh:
+# solo syntax highlighting + autocompletado.
+
+# Modo de edición vim (normal/insert/visual con ESC)
+set -o vi
+
+# Syntax highlighting tipo fish/zsh (viene activado por defecto,
+# se deja explícito para que sea fácil desactivarlo)
+bleopt highlight_syntax=1
+bleopt highlight_filename=1
+bleopt highlight_variable=1
+
+# Autocompletado automático tipo fish (sugerencia fantasma + TAB).
+# Viene activado por defecto, se deja explícito y con 100 ms de retardo.
+bleopt complete_auto_complete=1
+bleopt complete_auto_history=1
+bleopt complete_auto_delay=100
+
+# Línea en blanco entre cada comando y el siguiente prompt.
+# (Antes la ponía oh-my-posh con newline=true en el primer bloque, pero un
+# prompt que EMPIEZA con \n dejaba una línea "~" fantasma en el arranque.)
+bleopt prompt_ruler=empty-line

@@ -1,0 +1,6 @@
+# Logs y temporales
+*.log
+*.tmp
+
+# Estado local, nunca en el repo
+.dotfiles-backup/

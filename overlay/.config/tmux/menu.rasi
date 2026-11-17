@@ -1,0 +1,157 @@
+/* Compact theme for the tmux command menu */
+@import "~/.config/rofi/colors.rasi"
+
+* {
+    font: "Fira Sans 11";
+}
+
+window {
+    width: 42em;
+    height: 30em;
+    transparency: "real";
+    enabled: true;
+    cursor: "default";
+    spacing: 0em;
+    padding: 0.6em;
+    border: 0.06em;
+    border-color: @primary;
+    border-radius: 0.8em;
+    background-color: @surface;
+}
+
+mainbox {
+    enabled: true;
+    spacing: 0.4em;
+    padding: 0.2em;
+    orientation: vertical;
+    children: [ "inputbar", "listview" ];
+    background-color: transparent;
+}
+
+inputbar {
+    enabled: true;
+    spacing: 0.4em;
+    padding: 0.4em 0.6em;
+    border-radius: 0.5em;
+    background-color: @surface-container;
+    children: [ "textbox-prompt-colon", "entry" ];
+}
+
+textbox-prompt-colon {
+    expand: false;
+    str: "tmux";
+    padding: 0 0.4em 0 0;
+    text-color: @primary;
+    background-color: transparent;
+    font: "Fira Sans 11 bold";
+}
+
+entry {
+    spacing: 0.4em;
+    padding: 0.2em;
+    text-color: @on-surface;
+    cursor: text;
+    placeholder: "buscar comando...";
+    placeholder-color: @outline;
+    background-color: transparent;
+}
+
+listview {
+    padding: 0em;
+    spacing: 0.1em;
+    enabled: true;
+    columns: 1;
+    lines: 12;
+    cycle: true;
+    dynamic: true;
+    scrollbar: false;
+    layout: vertical;
+    reverse: false;
+    fixed-height: true;
+    fixed-columns: true;
+    cursor: "default";
+    background-color: transparent;
+    text-color: @on-surface;
+}
+
+element {
+    enabled: true;
+    spacing: 0.5em;
+    padding: 0.35em 0.6em;
+    cursor: pointer;
+    border-radius: 0.5em;
+    background-color: transparent;
+    text-color: @on-surface;
+    children: [ "element-text" ];
+}
+
+element-icon {
+    enabled: false;
+}
+
+element selected.normal {
+    background-color: @primary;
+    text-color: @on-primary;
+    border-radius: 0.5em;
+}
+
+element normal.normal {
+    background-color: inherit;
+    text-color: @on-surface;
+}
+
+element normal.urgent {
+    background-color: inherit;
+    text-color: @error;
+}
+
+element normal.active {
+    background-color: inherit;
+    text-color: @primary;
+}
+
+element selected.urgent {
+    background-color: inherit;
+    text-color: @on-primary;
+}
+
+element selected.active {
+    background-color: inherit;
+    text-color: @on-primary;
+}
+
+element alternate.normal {
+    background-color: inherit;
+    text-color: @on-surface;
+}
+
+element alternate.urgent {
+    background-color: inherit;
+    text-color: @error;
+}
+
+element alternate.active {
+    background-color: inherit;
+    text-color: @primary;
+}
+
+element-text {
+    vertical-align: 0.5;
+    horizontal-align: 0.0;
+    cursor: inherit;
+    background-color: transparent;
+    text-color: inherit;
+}
+
+error-message {
+    text-color: @on-surface;
+    background-color: @surface;
+    children: [ "textbox" ];
+}
+
+textbox {
+    text-color: inherit;
+    background-color: inherit;
+    vertical-align: 0.5;
+    horizontal-align: 0.5;
+}

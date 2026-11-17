@@ -1,0 +1,8 @@
+# -----------------------------------------------------
+# Línea en blanco tras el fastfetch inicial, antes del primer prompt
+# (la pone ble.sh con prompt_ruler en los siguientes). Con guarda para no
+# manchar la salida de shells no interactivos.
+[[ $- == *i* ]] && echo
+# ble.sh: activar el line editor AL FINAL de toda la config.
+# Este fichero lo carga el loader de ML4W después de ~/.config/bashrc/*.
+[[ ! ${BLE_VERSION-} ]] || ble-attach

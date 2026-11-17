@@ -1,0 +1,4 @@
+amd-ucode
+nvidia-open-dkms
+nvidia-utils
+nvidia-container-toolkit

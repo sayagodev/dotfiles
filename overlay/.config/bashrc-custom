@@ -1,0 +1,261 @@
+# -----------------------------------------------------
+# CUSTOMIZATION
+# -----------------------------------------------------
+# Lo carga ~/.config/bashrc/20-customization (ML4W), antes de
+# 30-autostart. El ble-attach final vive en ~/.bashrc_custom.
+# -----------------------------------------------------
+POSH=agnoster
+
+# Fcitx5 en apps GTK lanzadas desde la terminal. Hyprland ya exporta
+# XMODIFIERS/SDL_IM_MODULE en ~/.config/hypr/custom.lua; GTK usa su
+# propio módulo. Si algún día quitas este módulo, añade
+# --enable-wayland-ime a Chromium/Electron en su lugar.
+export GTK_IM_MODULE=fcitx
+
+alias ml='ddcutil --bus 4 setvcp 10'
+alias mr='ddcutil --bus 5 setvcp 10'
+alias tnl='cloudflared tunnel --url http://localhost:${1}'
+
+# -----------------------------------------------------
+# Functions
+# -----------------------------------------------------
+setmime() {
+  local file mime desktop selected
+
+  if [ $# -ne 1 ]; then
+    echo "Uso: setmime <archivo>"
+    return 1
+  fi
+
+  file="$1"
+
+  if [ ! -e "$file" ]; then
+    echo "Error: el archivo no existe: $file"
+    return 1
+  fi
+
+  if ! command -v xdg-mime >/dev/null 2>&1; then
+    echo "Error: xdg-mime no está instalado"
+    return 1
+  fi
+
+  if ! command -v fzf >/dev/null 2>&1; then
+    echo "Error: fzf no está instalado"
+    return 1
+  fi
+
+  mime="$(xdg-mime query filetype "$file")"
+  if [ -z "$mime" ]; then
+    echo "Error: no se pudo detectar el MIME del archivo"
+    return 1
+  fi
+
+  selected="$(
+    find /usr/share/applications -maxdepth 1 -type f -name '*.desktop' | sort | fzf \
+      --prompt="Elige aplicación para $mime > " \
+      --preview='basename {}'
+  )"
+
+  if [ -z "$selected" ]; then
+    echo "Cancelado"
+    return 1
+  fi
+
+  desktop="$(basename "$selected")"
+
+  if ! xdg-mime default "$desktop" "$mime"; then
+    echo "Error: no se pudo asignar $desktop para $mime"
+    return 1
+  fi
+
+  echo "Asignado: $mime -> $desktop"
+}
+
+# -----------------------------------------------------
+# Prompt
+# -----------------------------------------------------
+# oh-my-posh ya se inicializa en ~/.config/bashrc/20-customization (ML4W).
+# No repetirlo aquí: duplicaba el prompt y ralentizaba cada shell.
+# Para cambiar de tema sin tocar upstream, sobrescribe 20-customization
+# en ~/.config/bashrc/custom/ (el loader de ML4W da prioridad a custom/).
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+# pnpm
+export PNPM_HOME="$HOME/.local/share/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME/bin:"*) ;;
+  *) export PATH="$PNPM_HOME/bin:$PATH" ;;
+esac
+# pnpm end
+
+
+# -----------------------------------------------------
+# Exports
+# -----------------------------------------------------
+export EDITOR=nvim
+export PATH="/usr/lib/ccache/bin/:$PATH"
+export PATH=$PATH:~/.cargo/bin/
+export PATH=$PATH:~/.local/bin/
+
+# Bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+# opencode
+export PATH="$HOME/.opencode/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
+
+bind -x '"\C-o": lfcd'
+
+lfcd () {
+  local tmp
+  tmp="$(mktemp)"
+  lf -last-dir-path="$tmp"
+  if [ -f "$tmp"  ]; then
+    cd "$(cat "$tmp")" || return 
+  fi
+  rm -f "$tmp"
+}
+
+rename_videos() {
+  for file in *.mp4; do
+    # Verifica que el archivo exista para evitar errores si la carpeta no tiene mp4s
+    [ -e "$file" ] || continue
+
+    # Extraer el número entre paréntesis usando Regex
+    if [[ "$file" =~ \(([0-9]+)\)\.mp4$ ]]; then
+      num="${BASH_REMATCH[1]}"
+    else
+      # Si no tiene el formato (N), asumimos que es el video inicial (0)
+      num=0
+    fi
+
+    # Formatear el número a 3 dígitos y agregar el prefijo #
+    new_name=$(printf "#%03d.mp4" "$num")
+
+    # Medida de seguridad: evitar sobreescribir si el archivo destino ya existe
+    if [ -e "$new_name" ]; then
+      echo "⚠️  Advertencia: '$new_name' ya existe. Saltando '$file'..."
+      continue
+    fi
+
+    # Ejecutar el renombramiento
+    echo "✅ Renombrando: '$file' -> '$new_name'"
+    mv "$file" "$new_name"
+  done
+}
+
+# -----------------------------------------------------
+# AI agent aliases (used by tdl below)
+# -----------------------------------------------------
+# ML4W define alias c='clear' en 10-aliases; lo sobreescribimos a
+# propósito. El unalias hace la intención explícita y no depende del orden.
+unalias c 2>/dev/null
+alias c='opencode --auto'
+alias cx='printf "\033[2J\033[3J\033[H" && claude --permission-mode bypassPermissions'
+alias cy='codex -s danger-full-access -a never'
+alias ic='tdl c'
+alias ix='tdl cx'
+alias icx='tdl c cx'
+
+# Create a Tmux Dev Layout with editor, ai, and terminal
+# Usage: tdl <c|cx|codex|other_ai> [<second_ai>]
+tdl() {
+  [[ -z $1 ]] && { echo "Usage: tdl <c|cx|codex|other_ai> [<second_ai>]"; return 1; }
+  [[ -z $TMUX ]] && { echo "You must start tmux to use tdl."; return 1; }
+
+  local current_dir="${PWD}"
+  local editor_pane ai_pane ai2_pane bottom_pane
+  local ai="$1"
+  local ai2="$2"
+
+  # Use TMUX_PANE for the pane we're running in (stable even if active window changes)
+  editor_pane="$TMUX_PANE"
+
+  # Name the current window after the base directory name
+  tmux rename-window -t "$editor_pane" "$(basename "$current_dir")"
+
+  # Split window vertically - top 85%, bottom 15% (target editor pane explicitly)
+  bottom_pane=$(tmux split-window -v -p 15 -t "$editor_pane" -c "$current_dir" -P -F '#{pane_id}')
+
+  # Split editor pane horizontally - AI on right 30% (capture new pane ID directly)
+  ai_pane=$(tmux split-window -h -p 30 -t "$editor_pane" -c "$current_dir" -P -F '#{pane_id}')
+
+  # If second AI provided, split the AI pane vertically
+  if [[ -n $ai2 ]]; then
+    ai2_pane=$(tmux split-window -v -t "$ai_pane" -c "$current_dir" -P -F '#{pane_id}')
+    tmux send-keys -t "$ai2_pane" clear C-m
+    tmux send-keys -t "$ai2_pane" "$ai2" C-m
+  fi
+
+  # Clear each pane (fastfetch prints at shell start) and run the ai in the right pane
+  tmux send-keys -t "$ai_pane" clear C-m
+  tmux send-keys -t "$ai_pane" "$ai" C-m
+  tmux send-keys -t "$bottom_pane" clear C-m
+
+  # Run nvim in the left pane
+  tmux send-keys -t "$editor_pane" clear C-m
+  tmux send-keys -t "$editor_pane" "$EDITOR" C-m
+
+  # Select the nvim pane for focus
+  tmux select-pane -t "$ai_pane"
+}
+
+# Create a Tmux Dev Square layout with editor, diff watch, terminal, and opencode
+# Usage: tds
+tds() {
+  [[ -n $1 ]] && { echo "Usage: tds"; return 1; }
+  [[ -z $TMUX ]] && { echo "You must start tmux to use tds."; return 1; }
+
+  local current_dir="${PWD}"
+  local editor_pane diff_pane terminal_pane opencode_pane
+
+  editor_pane="$TMUX_PANE"
+
+  tmux rename-window -t "$editor_pane" "$(basename "$current_dir")"
+
+  terminal_pane=$(tmux split-window -v -p 50 -t "$editor_pane" -c "$current_dir" -P -F '#{pane_id}')
+  diff_pane=$(tmux split-window -h -p 50 -t "$editor_pane" -c "$current_dir" -P -F '#{pane_id}')
+  opencode_pane=$(tmux split-window -h -p 50 -t "$terminal_pane" -c "$current_dir" -P -F '#{pane_id}')
+
+  tmux send-keys -t "$editor_pane" -l "nvim ."
+  tmux send-keys -t "$editor_pane" C-m
+  tmux send-keys -t "$diff_pane" -l "hunk diff --watch"
+  tmux send-keys -t "$diff_pane" C-m
+  tmux send-keys -t "$opencode_pane" -l "opencode"
+  tmux send-keys -t "$opencode_pane" C-m
+
+  tmux select-pane -t "$editor_pane"
+}
+
+# Create multiple tdl windows with one per subdirectory in the current directory
+# Usage: tdlm <c|cx|codex|other_ai> [<second_ai>]
+tdlm() {
+  [[ -z $1 ]] && { echo "Usage: tdlm <c|cx|codex|other_ai> [<second_ai>]"; return 1; }
+  [[ -z $TMUX ]] && { echo "You must start tmux to use tdlm."; return 1; }
+
+  local ai="$1"
+  local ai2="$2"
+  local base_dir="$PWD"
+  local first=true
+
+  # Rename the session to the current directory name (replace dots/colons which tmux disallows)
+  tmux rename-session "$(basename "$base_dir" | tr '.:' '--')"
+
+  for dir in "$base_dir"/*/; do
+    [[ -d $dir ]] || continue
+    local dirpath="${dir%/}"
+
+    if $first; then
+      # Reuse the current window for the first project
+      tmux send-keys -t "$TMUX_PANE" "cd '$dirpath' && tdl $ai $ai2" C-m
+      first=false
+    else
+      local pane_id=$(tmux new-window -c "$dirpath" -P -F '#{pane_id}')
+      tmux send-keys -t "$pane_id" "tdl $ai $ai2" C-m
+    fi
+  done
+}

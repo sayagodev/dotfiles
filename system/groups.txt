@@ -1,0 +1,6 @@
+docker
+input
+libvirt
+ollama
+uinput
+wheel

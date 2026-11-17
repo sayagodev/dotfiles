@@ -1,0 +1,17 @@
+bluetooth.service
+docker.service
+iwd.service
+kanata.service
+libvirtd-admin.socket
+libvirtd-ro.socket
+libvirtd.service
+libvirtd.socket
+mariadb.service
+NetworkManager.service
+ollama.service
+rustdesk.service
+sddm.service
+virtlockd-admin.socket
+virtlockd.socket
+virtlogd-admin.socket
+virtlogd.socket

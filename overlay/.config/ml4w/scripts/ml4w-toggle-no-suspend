@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# ML4W No Suspend toggle
+# Prevents system suspend while enabled (e.g. downloads, presentations, monitoring).
+# State is persisted in ~/.config/ml4w/settings/no-suspend (survives updates).
+
+SETTINGS_DIR="$HOME/.config/ml4w/settings"
+MARKER="$SETTINGS_DIR/no-suspend"
+
+# Pattern with [i] trick: pgrep/pkill never match their own command line.
+INHIBIT_PATTERN="systemd-inhibit.*ML4W [N]o Suspend"
+
+# shellcheck source=/dev/null
+source "$HOME/.config/ml4w/scripts/ml4w-notification-handler"
+
+notify() {
+    notify_user --a "ML4W No Suspend" --s "$1" --m "$2"
+}
+
+is_active() {
+    pgrep -f "$INHIBIT_PATTERN" >/dev/null
+}
+
+start_no_suspend() {
+    local force=0
+    [ "$1" = "--force" ] && force=1
+
+    # Without --force only re-apply when it was enabled before (used at login).
+    if [ "$force" -eq 0 ] && [ ! -f "$MARKER" ]; then
+        return 0
+    fi
+
+    if is_active; then
+        mkdir -p "$SETTINGS_DIR"
+        touch "$MARKER"
+        echo ":: No Suspend already active"
+        return 0
+    fi
+
+    mkdir -p "$SETTINGS_DIR"
+    touch "$MARKER"
+    # idle:sleep:handle-lid-switch -> idle frena los timers de hypridle
+    # (hypridle solo respeta --what=idle; sleep solo no basta porque
+    # systemctl suspend en modo no-interactivo ignora inhibidores con --check-inhibitors=auto).
+    setsid systemd-inhibit --what=idle:sleep:handle-lid-switch --who="ML4W No Suspend" --why="No suspend (user toggle)" sleep infinity >/dev/null 2>&1 &
+    sleep 0.3
+
+    if is_active; then
+        notify "No Suspend enabled" "The system will not suspend until you disable it."
+        echo ":: No Suspend enabled"
+    else
+        echo ":: ERROR: failed to start inhibitor" >&2
+        return 1
+    fi
+}
+
+stop_no_suspend() {
+    rm -f "$MARKER"
+    if is_active; then
+        pkill -f "$INHIBIT_PATTERN"
+        notify "No Suspend disabled" "System suspend is active again."
+        echo ":: No Suspend disabled"
+    else
+        echo ":: No Suspend already disabled"
+    fi
+}
+
+case "${1:-toggle}" in
+    start)  start_no_suspend ;;
+    stop)   stop_no_suspend ;;
+    status) is_active && echo "1" || echo "0" ;;
+    toggle)
+        if is_active; then
+            stop_no_suspend
+        else
+            start_no_suspend --force
+        fi
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|status|toggle}" >&2
+        exit 1
+        ;;
+esac

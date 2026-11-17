@@ -1,0 +1,6 @@
+com.dec05eba.gpu_screen_recorder
+com.github.tchx84.Flatseal
+com.ml4w.calendar
+com.stremio.Stremio
+org.localsend.localsend_app
+org.telegram.desktop

@@ -1,0 +1,18 @@
+# -----------------------------------------------------
+# ble.sh: syntax highlighting + autocompletado
+# Debe cargarse ANTES que el resto de la config (oh-my-posh, aliases...).
+# El loader de ML4W usa este fichero en lugar de ~/.config/bashrc/00-init.
+# -----------------------------------------------------
+[[ $- == *i* ]] && source -- /usr/share/blesh/ble.sh --attach=none
+
+# -----------------------------------------------------
+# INIT (original de ML4W, sin cambios)
+# -----------------------------------------------------
+
+# -----------------------------------------------------
+# Exports
+# -----------------------------------------------------
+export EDITOR=nvim
+export PATH="/usr/lib/ccache/bin/:$PATH"
+export PATH=$PATH:~/.cargo/bin/
+export PATH=$PATH:~/.local/bin/
