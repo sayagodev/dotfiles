@@ -10,7 +10,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=lib/manifest.sh
 source "$ROOT/lib/manifest.sh"
 
-HOST="${DOTFILES_HOST:-$(cat /etc/hostname 2>/dev/null || uname -n)}"
+HOST="$(resolve_host)"
 have() { command -v "$1" >/dev/null 2>&1; }
 
 # -------------------------------------------------------------

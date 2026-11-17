@@ -16,13 +16,25 @@ oficiales, AUR, flatpak, herramientas, servicios y Neovim. Tiene toggle de
 **dry-run**, selección recomendada y al aplicar ejecuta
 `install.sh --only <selección>`: la TUI no reimplementa nada.
 
+Teclas: `espacio` marca · `p` paquetes · `h` perfil de máquina · `a` todo ·
+`n` nada · `r` recomendado · `d` dry-run · `enter` aplica · `?` ayuda.
+
+- **`h` perfil de máquina**: cicla por `hosts/` y “sin perfil”. El elegido
+  se guarda en `~/.config/dotfiles/host` al aplicar, así dos equipos con el
+  mismo hostname (`dev`) no comparten monitores ni paquetes de hardware.
+- **`p` paquetes**: `gum filter` con todos los paquetes. `tab` marca,
+  `enter` confirma. Sustituye las listas completas y activa solo las
+  categorías con paquetes elegidos. Para instalar únicamente `blesh-git`:
+  `p` → `blesh` → `tab` → `enter` → aplicar.
+
 La primera vez:
 
 1. Detecta Go. Si no está, descarga la **última estable** desde `go.dev`,
    verifica su sha256 y la extrae en `~/.local/share/dotfiles/go` (sin sudo).
 2. Compila `tui/` en `~/.local/share/dotfiles/bin/dotfiles-tui`.
-3. Usa [gum](https://github.com/charmbracelet/gum) para confirmaciones y
-   spinners si está disponible (ya viene en `packages/native.txt`).
+3. Usa [gum](https://github.com/charmbracelet/gum) para confirmaciones,
+   spinners y el selector de paquetes si está disponible (ya viene en
+   `packages/native.txt`).
 
 Opciones:
 
@@ -122,6 +134,10 @@ Regla al añadir algo nuevo:
 - `--only links,overrides,host,…`: ejecuta solo esas categorías. Es lo que
   usa la TUI. Válidas: `links`, `overrides`, `host`, `native`, `aur`,
   `flatpak`, `tools`, `system`, `nvim` (y el alias `packages`).
+- `--native-pkgs "firefox kitty"`, `--aur-pkgs "blesh-git"`,
+  `--flatpak-apps "org.telegram.desktop"`: instala exactamente esos
+  paquetes en vez de la lista completa. Con selección manual no se añaden
+  los paquetes de hardware del host.
 - `--all`: todo lo anterior. `--dry-run` no escribe nada.
 
 ### Copias de seguridad
@@ -247,6 +263,9 @@ actualiza `.upstream/`.
 - **Base real: ML4W 2.15.** `~/.config/ml4w/version.json` decía 2.12.3, pero
   el árbol instalado corresponde a 2.15 (comprobado por hashes). Por eso el
   drift se ancla a `overrides/BASE_VERSION`, no a `version.json`.
+- **Perfil por máquina**: `~/.config/dotfiles/host` manda sobre el
+  hostname. Dos equipos llamados `dev` pueden usar `hosts/dev` y
+  `hosts/laptop` sin pisarse monitores ni paquetes de hardware.
 - **Teclado US internacional** (`us` + `intl` + `lv3:lalt_switch`) vive en
   `custom.lua`, no en `input.lua`, para sobrevivir a los updates.
 - **ble.sh** se carga temprano desde `bashrc/custom/00-init` y se engancha

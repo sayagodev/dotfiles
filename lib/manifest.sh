@@ -3,6 +3,22 @@
 #  Lo leen install.sh y scripts/status.sh.
 # =============================================================
 
+# Identidad de la máquina para elegir hosts/<id>/.
+# Prioridad: $DOTFILES_HOST > ~/.config/dotfiles/host > hostname.
+# Sirve para dos equipos con el mismo hostname (p. ej. ambos "dev").
+resolve_host() {
+    if [[ -n ${DOTFILES_HOST:-} ]]; then
+        printf '%s\n' "$DOTFILES_HOST"
+        return
+    fi
+    local file="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/host"
+    if [[ -s $file ]]; then
+        head -n1 "$file" | tr -d '[:space:]'
+        return
+    fi
+    cat /etc/hostname 2>/dev/null || uname -n
+}
+
 # Symlinks desde $HOME al repo.
 LINKED=(
     ".bash_profile"

@@ -1,22 +1,47 @@
-# host `dev`
+# Perfiles de máquina (`hosts/`)
 
-Perfil de esta máquina concreta. `install.sh` lo aplica solo cuando
-`/etc/hostname` coincide con el nombre del directorio (o cuando pasas
-`DOTFILES_HOST=dev`).
+Cada carpeta es un perfil que se aplica según la identidad de la máquina:
 
-## Contenido
+1. `$DOTFILES_HOST` si está definido.
+2. `~/.config/dotfiles/host` (lo escribe la TUI al elegir perfil con `h`).
+3. `/etc/hostname`.
 
-- `hypr/monitors.lua` — monitores (generado con nwg-displays). Sustituye al
-  de ML4W y queda en su blacklist.
-- `packages.txt` — paquetes específicos de este hardware: microcódigo AMD y
-  la pila de NVIDIA. Se instalan aparte de `packages/native.txt` para que
-  una máquina con otra GPU no arrastre drivers equivocados.
+Sirve para dos equipos con el mismo hostname (por ejemplo, ambos `dev`).
+
+## Contenido de un perfil
+
+- `hypr/monitors.lua` — monitores (sustituye al de ML4W y va a su blacklist).
+- `packages.txt` — paquetes propios del hardware (microcódigo, GPU). Se
+  instalan con los oficiales; vacío = no añadir nada.
 
 ## Máquina nueva
 
+No copies `dev` tal cual: tiene los monitores del escritorio.
+
 ```bash
-cp -a hosts/dev hosts/$(cat /etc/hostname)
-# edita monitors.lua y packages.txt
-./install.sh
-./scripts/snapshot.sh --update
+mkdir -p ~/dotfiles/hosts/laptop/hypr
+cp ~/.config/hypr/monitors.lua ~/dotfiles/hosts/laptop/hypr/monitors.lua
+echo laptop > ~/.config/dotfiles/host
+cd ~/dotfiles && ./install.sh --only host
+```
+
+O desde la TUI: `./setup.sh` → `h` hasta `laptop` → aplicar. El perfil queda
+guardado para las próximas ejecuciones.
+
+## Laptop `dev` que recibió el perfil del escritorio
+
+Si el hostname era `dev`, se aplicó `hosts/dev` (HDMI-A-1/DP-3 y paquetes
+NVIDIA). Para recuperar la config original:
+
+```bash
+ls -1t ~/.dotfiles-backup | head
+cp -a ~/.dotfiles-backup/<carpeta>/.config/hypr/monitors.lua ~/.config/hypr/monitors.lua
+hyprctl reload
+```
+
+Después crea el perfil `laptop` como arriba, y revisa que no se hayan
+instalado drivers que no correspondan:
+
+```bash
+pacman -Q | grep -E 'nvidia|amd-ucode'
 ```

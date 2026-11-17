@@ -16,6 +16,10 @@
 #    ./install.sh --all           # todo lo anterior
 #    ./install.sh --only links,overrides
 #                                 # solo esas categorías (lo usa la TUI)
+#    ./install.sh --only aur --aur-pkgs "blesh-git"
+#                                 # instala solo esos paquetes, no la lista
+#                                 # completa (también --native-pkgs y
+#                                 # --flatpak-apps)
 #
 #  Salida: azul = información, verde = ok, amarillo = aviso,
 #  rojo = fallo (con pista de cómo arreglarlo). Al final hay un
@@ -35,6 +39,12 @@ DO_TOOLS=0
 DO_SYSTEM=0
 DO_NVIM=0
 ONLY=""
+NATIVE_PKGS_SET=0
+AUR_PKGS_SET=0
+FLATPAK_PKGS_SET=0
+NATIVE_PKGS=""
+AUR_PKGS=""
+FLATPAK_PKGS=""
 
 usage() {
     awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"
@@ -52,6 +62,9 @@ while (($#)); do
             [[ -n ${2:-} ]] || { echo "--only necesita una lista (ej: links,overrides)" >&2; exit 2; }
             ONLY="$2"; shift ;;
         --only=*) ONLY="${1#*=}" ;;
+        --native-pkgs) NATIVE_PKGS="${2-}"; NATIVE_PKGS_SET=1; shift ;;
+        --aur-pkgs) AUR_PKGS="${2-}"; AUR_PKGS_SET=1; shift ;;
+        --flatpak-apps) FLATPAK_PKGS="${2-}"; FLATPAK_PKGS_SET=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *)
             echo "Opción desconocida: $1 (usa --help)" >&2
@@ -332,7 +345,7 @@ fi
 # shellcheck source=lib/manifest.sh
 source "$MANIFEST"
 
-HOST="${DOTFILES_HOST:-$(cat /etc/hostname 2>/dev/null || uname -n)}"
+HOST="$(resolve_host)"
 
 # -------------------------------------------------------------
 # Sistema de ficheros: enlaces
@@ -426,24 +439,32 @@ do_native() {
         return
     fi
 
-    if [[ -s $DOTFILES_DIR/packages/native.txt ]]; then
-        local pkgs
+    local pkgs count
+    if ((NATIVE_PKGS_SET)); then
+        pkgs="$(echo $NATIVE_PKGS)"
+    elif [[ -s $DOTFILES_DIR/packages/native.txt ]]; then
         pkgs="$(tr '\n' ' ' <"$DOTFILES_DIR/packages/native.txt")"
-        if ((DRY_RUN)); then
-            info "[dry-run] sudo pacman -S --needed $(wc -l <"$DOTFILES_DIR/packages/native.txt") paquetes oficiales"
-        elif sudo pacman -S --needed --noconfirm $pkgs >>"$LOG_FILE" 2>&1; then
-            ok "paquetes oficiales"
-        else
-            fail "algunos paquetes oficiales fallaron" \
-                "Revisa el log y ejecuta: sudo pacman -S --needed $(printf '%s' "$pkgs" | cut -c1-60)…"
-        fi
     else
         warn "packages/native.txt vacío; ejecuta ./scripts/snapshot.sh"
+        pkgs=""
+    fi
+    count=$(wc -w <<<"$pkgs")
+
+    if ((count == 0)); then
+        info "0 paquetes oficiales seleccionados"
+    elif ((DRY_RUN)); then
+        info "[dry-run] sudo pacman -S --needed $count paquetes oficiales"
+    elif sudo pacman -S --needed --noconfirm $pkgs >>"$LOG_FILE" 2>&1; then
+        ok "paquetes oficiales ($count)"
+    else
+        fail "algunos paquetes oficiales fallaron" \
+            "Revisa el log y ejecuta: sudo pacman -S --needed $(printf '%s' "$pkgs" | cut -c1-60)…"
     fi
 
     # Los paquetes de hardware del host son pacman, van con los oficiales.
+    # Con una selección manual no se añaden: se instala exactamente lo elegido.
     local host_pkgs="$DOTFILES_DIR/hosts/$HOST/packages.txt"
-    if [[ -s $host_pkgs ]]; then
+    if ((NATIVE_PKGS_SET == 0)) && [[ -s $host_pkgs ]]; then
         local hp
         hp="$(tr '\n' ' ' <"$host_pkgs")"
         if ((DRY_RUN)); then
@@ -460,13 +481,22 @@ do_native() {
 do_aur() {
     step "Paquetes AUR"
 
-    if [[ ! -s $DOTFILES_DIR/packages/aur.txt ]]; then
+    local aur count helper=""
+    if ((AUR_PKGS_SET)); then
+        aur="$(echo $AUR_PKGS)"
+    elif [[ -s $DOTFILES_DIR/packages/aur.txt ]]; then
+        aur="$(tr '\n' ' ' <"$DOTFILES_DIR/packages/aur.txt")"
+    else
         warn "packages/aur.txt vacío; ejecuta ./scripts/snapshot.sh"
+        aur=""
+    fi
+    count=$(wc -w <<<"$aur")
+
+    if ((count == 0)); then
+        info "0 paquetes AUR seleccionados"
         return
     fi
 
-    local aur helper=""
-    aur="$(tr '\n' ' ' <"$DOTFILES_DIR/packages/aur.txt")"
     have yay && helper=yay
     [[ -z $helper ]] && have paru && helper=paru
 
@@ -474,9 +504,9 @@ do_aur() {
         fail "no hay helper de AUR (yay/paru)" \
             "Instala uno: sudo pacman -S --needed base-devel git && git clone https://aur.archlinux.org/yay-bin.git && cd yay-bin && makepkg -si"
     elif ((DRY_RUN)); then
-        info "[dry-run] $helper -S --needed $(wc -l <"$DOTFILES_DIR/packages/aur.txt") paquetes AUR"
+        info "[dry-run] $helper -S --needed $count paquetes AUR"
     elif "$helper" -S --needed --noconfirm $aur >>"$LOG_FILE" 2>&1; then
-        ok "paquetes AUR"
+        ok "paquetes AUR ($count)"
     else
         fail "algunos paquetes AUR fallaron" \
             "Revisa el log: $LOG_FILE  ·  reintenta: $helper -S --needed $(printf '%s' "$aur" | cut -c1-60)…"
@@ -490,17 +520,27 @@ do_flatpak() {
         warn "flatpak no está instalado; se omite"
         return
     fi
-    if [[ ! -s $DOTFILES_DIR/packages/flatpak.txt ]]; then
+
+    local fps count
+    if ((FLATPAK_PKGS_SET)); then
+        fps="$(echo $FLATPAK_PKGS)"
+    elif [[ -s $DOTFILES_DIR/packages/flatpak.txt ]]; then
+        fps="$(tr '\n' ' ' <"$DOTFILES_DIR/packages/flatpak.txt")"
+    else
         warn "packages/flatpak.txt vacío; ejecuta ./scripts/snapshot.sh"
+        fps=""
+    fi
+    count=$(wc -w <<<"$fps")
+
+    if ((count == 0)); then
+        info "0 apps flatpak seleccionadas"
         return
     fi
 
-    local fps
-    fps="$(tr '\n' ' ' <"$DOTFILES_DIR/packages/flatpak.txt")"
     if ((DRY_RUN)); then
-        info "[dry-run] flatpak install $(wc -l <"$DOTFILES_DIR/packages/flatpak.txt") apps"
+        info "[dry-run] flatpak install $count apps"
     elif flatpak install -y --noninteractive $fps >>"$LOG_FILE" 2>&1; then
-        ok "apps flatpak"
+        ok "apps flatpak ($count)"
     else
         fail "algunas apps flatpak fallaron" \
             "Ejecuta: flatpak install $fps"
