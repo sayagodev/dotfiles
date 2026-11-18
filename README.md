@@ -275,10 +275,11 @@ actualiza `.upstream/`.
 - **`alias c`** pisa el `c='clear'` de ML4W a propósito (`unalias` explícito
   antes). Si prefieres `clear`, renómbralo a `oc`.
 - **Fcitx**: `custom.lua` exporta `XMODIFIERS`/`SDL_IM_MODULE` y
-  `environment.d` los replica para systemd. `GTK_IM_MODULE=fcitx` se
-  mantiene en `bashrc-custom` para apps GTK lanzadas desde terminal. Si
-  quieres el path Wayland nativo, quita ese export y añade
-  `--enable-wayland-ime` a Chromium/Electron.
+  `environment.d` los replica para systemd. **No** se exporta
+  `GTK_IM_MODULE`: SDDM entra con `bash --login`, así que ponerlo en
+  `bashrc-custom` contamina todo el compositor y fcitx5 avisa al arrancar.
+  GTK usa el frontend nativo Wayland. Chromium, Edge y Electron/VS Code
+  llevan `--enable-wayland-ime` en sus flags (`*-flags.conf`).
 - **No-suspend** son dos piezas: el script
   `ml4w-toggle-no-suspend` (inhibidor de systemd + marker) y el switch del
   sidebar (`SidebarWindow.qml`). Ambas van en el repo; el QML es override.

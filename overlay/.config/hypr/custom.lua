@@ -37,8 +37,10 @@ hl.env("SDL_IM_MODULE", "fcitx")
 
 -- Autostart custom: sobrevive a updates de ml4w/omarchy (no tocar conf/autostart.lua)
 hl.on("hyprland.start", function()
-	-- Fcitx5: arrancar daemon si no está corriendo
-	hl.exec_cmd("fcitx5 --replace -d")
+	-- Fcitx5: arrancar daemon si no está corriendo.
+	-- `env -u GTK_IM_MODULE` evita el aviso de fcitx5 si el login
+	-- arrastra la variable (SDDM entra con bash --login).
+	hl.exec_cmd("env -u GTK_IM_MODULE fcitx5 --replace -d")
 	-- Propaga Wayland env a systemd (complementa conf/autostart.lua)
 	hl.exec_cmd("systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP")
 	-- Blueman applet: agente Bluetooth para auto-connect + icono tray en waybar

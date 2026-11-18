@@ -36,6 +36,10 @@ LINKED=(
     ".config/environment.d/10-fcitx.conf"
     ".config/autostart/gpu-screen-recorder-ui.desktop"
     ".config/systemd/user/wayscriber.service"
+    ".config/chromium-flags.conf"
+    ".config/edge-flags.conf"
+    ".config/code-flags.conf"
+    ".config/electron-flags.conf"
 )
 
 # Symlinks que viven DENTRO del árbol de ML4W: van a su blacklist.
@@ -45,6 +49,8 @@ TREE_LINKS=(
     ".config/hypr/scripts/skills-menu.sh"
     ".config/ml4w/scripts/ml4w-toggle-no-suspend"
     ".config/ml4w/wallpapers/shobun.jpg"
+    ".config/chromium-flags.conf"
+    ".config/edge-flags.conf"
 )
 
 # Overrides que sustituyen ficheros del árbol de ML4W.

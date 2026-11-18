@@ -6,11 +6,13 @@
 # -----------------------------------------------------
 POSH=agnoster
 
-# Fcitx5 en apps GTK lanzadas desde la terminal. Hyprland ya exporta
-# XMODIFIERS/SDL_IM_MODULE en ~/.config/hypr/custom.lua; GTK usa su
-# propio módulo. Si algún día quitas este módulo, añade
-# --enable-wayland-ime a Chromium/Electron en su lugar.
-export GTK_IM_MODULE=fcitx
+# Fcitx5: NO exportar GTK_IM_MODULE. SDDM ejecuta el login con
+# `bash --login`, así que este archivo contamina todo el entorno del
+# compositor; fcitx5 avisa al arrancar y GTK debe usar el frontend
+# nativo Wayland (text-input). XMODIFIERS/SDL_IM_MODULE quedan en
+# ~/.config/environment.d y ~/.config/hypr/custom.lua.
+# Chromium/Edge llevan --enable-wayland-ime en sus flags.
+# (Si necesitas QT_IM_MODULE para apps Qt5 concretas, ponlo por app.)
 
 alias ml='ddcutil --bus 4 setvcp 10'
 alias mr='ddcutil --bus 5 setvcp 10'
