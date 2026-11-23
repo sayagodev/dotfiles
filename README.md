@@ -12,7 +12,7 @@ de forma idempotente y sobreviviendo a sus actualizaciones.
 
 Arranca una TUI (Go + [bubbletea/bubbles](https://github.com/charmbracelet/bubbles))
 donde marcas qué aplicar en esta pasada: config, overrides, host, paquetes
-oficiales, AUR, flatpak, herramientas, servicios y Neovim. Tiene toggle de
+oficiales, AUR, flatpak, voxtype, herramientas, servicios y Neovim. Tiene toggle de
 **dry-run**, selección recomendada y al aplicar ejecuta
 `install.sh --only <selección>`: la TUI no reimplementa nada.
 
@@ -64,6 +64,7 @@ cd ~/dotfiles
 ./install.sh --tools        # oh-my-posh y nvm
 ./install.sh --system       # servicios, grupos y unidades de usuario
 ./install.sh --nvim         # clona git@github.com:sayagodev/nvim.git
+./install.sh --voxtype      # dictado opcional: paquete, modelo y servicio
 # o todo de una: ./install.sh --all
 ```
 
@@ -76,6 +77,107 @@ shell nuevo).
 `install.sh` es idempotente y **no aborta al primer error**: cada acción
 sale en verde/rojo con una pista, y al final hay un resumen. El log queda en
 `~/.local/state/dotfiles/install.log`.
+
+## Voxtype (dictado por voz, opcional)
+
+[Voxtype](https://voxtype.io) convierte voz en texto y lo escribe en la app
+activa. Es opcional: la TUI lo muestra como categoría propia y no se instala
+salvo que lo marques.
+
+```bash
+./install.sh --only voxtype     # paquete, dependencias, modelo y servicio
+```
+
+La categoría hace:
+
+1. Enlaza `hosts/<perfil>/voxtype/config.toml` a
+   `~/.config/voxtype/config.toml` (con backup del original).
+2. Instala `voxtype` desde AUR si falta (con `yay` o `paru`).
+3. Instala `wtype`, `wl-clipboard` y `playerctl` si faltan.
+4. Descarga el modelo declarado en `[whisper] model` de ese config.
+5. Habilita y reinicia `voxtype.service`.
+
+`voxtype` no está en `packages/aur.txt` ni `voxtype.service` en
+`system/user-units.txt`: esta categoría es la única que los toca, así que
+quien no quiera dictado no lo recibe con `--aur` ni con `--system`.
+
+### Cambiar la tecla
+
+La tecla de dictado está en `overlay/.config/hypr/custom.lua`:
+
+```lua
+local voxtypeKey = "KP_Enter"
+```
+
+Cámbiala por `F9`, `SUPER + F9`, `ALT + grave`, etc., y recarga Hyprland
+(`SUPER + SHIFT + R`). En una laptop sin teclado numérico, `KP_Enter` no
+existe: usa por ejemplo `SUPER + F9`.
+
+El bloque `[hotkey]` de `config.toml` es el hotkey evdev propio de voxtype
+y está desactivado porque se usa el binding del compositor. Si lo activas,
+pon ahí la tecla (`key = "SCROLLLOCK"`, `enabled = true`).
+
+### Modelo por máquina
+
+Cada perfil tiene su propio `hosts/<perfil>/voxtype/config.toml`; el modelo
+es la línea `[whisper] model`:
+
+| Perfil | Modelo | Por qué |
+| --- | --- | --- |
+| `dev` (escritorio, GPU) | `medium` | Más precisión con Vulkan |
+| `laptop` (iGPU) | `small` | Multilingüe, 466 MB, cabe en iGPU/CPU |
+
+Para una laptop sin GPU dedicada:
+
+- **`small`** es el equilibrio: español + inglés, ~3× tiempo real en CPU y
+  más rápido con Vulkan en iGPU Intel/AMD.
+- **`base`** (142 MB) o **`tiny`** (75 MB) si el portátil es viejo o va justo
+  de RAM.
+- **`medium`** (1.5 GB, ~5 GB de VRAM) no es para iGPU;
+  **`large-v3-turbo`** solo con GPU dedicada.
+- **Parakeet** (`parakeet-tdt-0.6b-v3-int8`, 670 MB) es más rápido y trae
+  puntuación, pero necesita el binario ONNX; el paquete `voxtype` de AUR
+  solo trae Whisper/Vulkan. Es una mejora opcional, no el default.
+
+Comprueba qué está usando:
+
+```bash
+voxtype info accel        # GPU/CPU y backend
+voxtype setup check       # dependencias, modelo, grupo input
+systemctl --user status voxtype
+```
+
+Si el portátil no tiene Vulkan o falla, fuerza CPU:
+
+```bash
+voxtype setup gpu --status
+voxtype setup gpu --disable
+```
+
+Cambiar el modelo:
+
+```bash
+# Edita el config del perfil (o usa voxtype config set, que escribe
+# a través del symlink al repo) y aplica:
+vi ~/dotfiles/hosts/laptop/voxtype/config.toml   # model = "small"
+./install.sh --only voxtype
+```
+
+`voxtype setup check` y el CLI leen el mismo config que el servicio, así que
+no hay que llevar el modelo en dos sitios.
+
+### Atajos de reunión
+
+`custom.lua` ya define:
+
+- `SUPER + CTRL + M` — empezar transcripción de reunión
+- `SUPER + ALT + M` — pausar
+- `SUPER + SHIFT + ALT + M` — reanudar
+- `SUPER + SHIFT + CTRL + M` — parar
+
+Documentación oficial: [modelos](https://voxtype.io/docs/MODEL_SELECTION_GUIDE),
+[configuración](https://voxtype.io/docs/CONFIGURATION) y
+[Parakeet](https://voxtype.io/docs/PARAKEET).
 
 ## Modelo de capas
 
@@ -101,7 +203,7 @@ Regla al añadir algo nuevo:
 
 1. Detecta el árbol de ML4W (por `active.json`; si falla, siguiendo el
    symlink `~/.config/hypr`) y se detiene con un mensaje claro si no existe.
-2. Crea **15 symlinks** desde `$HOME` al repo:
+2. Crea **19 symlinks** desde `$HOME` al repo:
    `.bash_profile`, `.bashrc_custom`, `.blerc`, `.config/bashrc-custom`,
    `.config/bashrc/custom/00-init`, `.config/hypr/custom.lua`,
    `.config/hypr/scripts/skills-menu.sh`,
@@ -109,8 +211,10 @@ Regla al añadir algo nuevo:
    `.config/ml4w/wallpapers/shobun.jpg`, `.config/tmux`,
    `.config/fcitx5`, `.config/kanata`,
    `.config/environment.d/10-fcitx.conf`,
-   `.config/autostart/gpu-screen-recorder-ui.desktop` y
-   `.config/systemd/user/wayscriber.service`.
+   `.config/autostart/gpu-screen-recorder-ui.desktop`,
+   `.config/systemd/user/wayscriber.service` y los flags de Chromium/Edge/VS Code
+   (`.config/chromium-flags.conf`, `.config/edge-flags.conf`,
+   `.config/code-flags.conf`, `.config/electron-flags.conf`).
 3. Copia **17 overrides** a `~/.config` (ficheros de ML4W que no tienen hook):
    `hypridle.conf`, keybindings, decorations, window, zen.toml, kitty.conf,
    `SidebarWindow.qml`, `mimeapps.list` y las preferencias de escritorio
@@ -129,16 +233,19 @@ Regla al añadir algo nuevo:
   `~/.local/bin` y nvm **v0.40.4** en `~/.nvm`; avisa (sin fallar) de
   bun, pnpm, rustup, opencode, claude, codex, lf y hunk.
 - `--system`: habilita los 17 servicios de `system/services.txt`, añade
-  los 6 grupos de `system/groups.txt` y las 3 unidades de usuario.
+  los 6 grupos de `system/groups.txt` y las 2 unidades de usuario.
 - `--nvim`: clona `git@github.com:sayagodev/nvim.git` si no existe.
+- `--voxtype`: dictado opcional. Instala `voxtype` desde AUR, sus
+  dependencias, el modelo de `hosts/<perfil>/voxtype/config.toml` y
+  habilita el servicio. Ver la sección de Voxtype.
 - `--only links,overrides,host,…`: ejecuta solo esas categorías. Es lo que
   usa la TUI. Válidas: `links`, `overrides`, `host`, `native`, `aur`,
-  `flatpak`, `tools`, `system`, `nvim` (y el alias `packages`).
+  `flatpak`, `tools`, `system`, `nvim`, `voxtype` (y el alias `packages`).
 - `--native-pkgs "firefox kitty"`, `--aur-pkgs "blesh-git"`,
   `--flatpak-apps "org.telegram.desktop"`: instala exactamente esos
   paquetes en vez de la lista completa. Con selección manual no se añaden
   los paquetes de hardware del host.
-- `--all`: todo lo anterior. `--dry-run` no escribe nada.
+- `--all`: todo lo anterior, incluido Voxtype. `--dry-run` no escribe nada.
 
 ### Copias de seguridad
 
@@ -175,7 +282,7 @@ overlay/                    espejo de $HOME; se enlaza con symlinks
 overrides/                  ficheros de ML4W que no tienen hook
   .upstream/                copia del upstream de la versión base
   BASE_VERSION              versión de ML4W sobre la que se tomaron
-hosts/<hostname>/           monitores y paquetes de hardware
+hosts/<perfil>/             monitores, paquetes y config de voxtype
 packages/                   native / aur / flatpak (generados)
 system/                     servicios, grupos, unidades de usuario
 scripts/
@@ -196,6 +303,8 @@ usuario y unidades de usuario. Se aplican con `--system`.
 - Colores de matugen, GTK/kitty/swaync generados por el tema y wallpapers
   salvo `shobun.jpg`.
 - Historiales, cachés, `.nvm`, `~/.local/bin`, `~/.config/gh`, claves SSH.
+- Modelos de voxtype (`~/.local/share/voxtype/models`): pesan cientos de
+  MB y se descargan con `./install.sh --only voxtype`.
 - Binarios grandes (`oh-my-posh`, `ocx`). Se reinstalan con
   `bootstrap/tools.sh` o su instalador.
 

@@ -30,7 +30,6 @@ ttf-joypixels
 ttf-wps-fonts
 tty-clock
 vercel
-voxtype
 waypaper-git
 wayscriber-bin
 webkit2gtk

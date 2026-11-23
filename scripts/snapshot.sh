@@ -74,7 +74,9 @@ if command -v pacman >/dev/null 2>&1; then
     else
         pacman -Qqen | sort | write_file packages/native.txt
     fi
-    pacman -Qqem | sort | write_file packages/aur.txt
+    # voxtype es opcional y lo instala `install.sh --voxtype`; si está
+    # instalado, no debe colarse en la lista general de AUR.
+    pacman -Qqem | grep -vxE 'voxtype|voxtype-debug' | sort | write_file packages/aur.txt
 else
     say "  ${Y}!${N} pacman no disponible; se omite"
 fi
@@ -93,9 +95,10 @@ if command -v systemctl >/dev/null 2>&1; then
         grep -vE '^(getty@|systemd-|remote-fs|NetworkManager-wait-online|NetworkManager-dispatcher)' |
         sort | write_file system/services.txt
 
+    # voxtype.service también es opcional y lo habilita esa misma categoría.
     systemctl --user list-unit-files --state=enabled --plain --no-pager 2>/dev/null |
         awk '$2 == "enabled" { print $1 }' |
-        grep -vE '^(wireplumber|pipewire|pipewire-pulse|xdg-user-dirs|p11-kit|figma-agent)' |
+        grep -vE '^(wireplumber|pipewire|pipewire-pulse|xdg-user-dirs|p11-kit|figma-agent|voxtype)' |
         sort | write_file system/user-units.txt
 fi
 

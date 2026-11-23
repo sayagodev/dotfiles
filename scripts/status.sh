@@ -172,6 +172,34 @@ else
 fi
 
 # -------------------------------------------------------------
+# Voxtype (opcional)
+# -------------------------------------------------------------
+vox_src="$ROOT/hosts/$HOST/voxtype/config.toml"
+if ! have voxtype; then
+    printf 'voxtype|na|opcional, no instalado\n'
+elif [[ ! -f $vox_src ]]; then
+    printf 'voxtype|pending|sin hosts/%s/voxtype/config.toml\n' "$HOST"
+else
+    vox_model="$(sed -n 's/^[[:space:]]*model[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$vox_src" | head -n1)"
+    [[ -n $vox_model ]] || vox_model="small"
+    vox_dir="${XDG_DATA_HOME:-$HOME/.local/share}/voxtype/models"
+    vox_linked=0
+    if [[ -L "$HOME/.config/voxtype/config.toml" ]] &&
+       [[ "$(readlink -f -- "$HOME/.config/voxtype/config.toml")" == "$(readlink -f -- "$vox_src")" ]]; then
+        vox_linked=1
+    fi
+    if [[ ! -e "$vox_dir/ggml-$vox_model.bin" && ! -e "$vox_dir/$vox_model" && ! -d "$vox_dir/$vox_model" ]]; then
+        printf 'voxtype|pending|modelo %s sin descargar\n' "$vox_model"
+    elif ((vox_linked)) && have systemctl && systemctl --user is-enabled --quiet voxtype.service 2>/dev/null; then
+        printf 'voxtype|ok|modelo %s · servicio activo\n' "$vox_model"
+    elif ((vox_linked)); then
+        printf 'voxtype|partial|modelo %s · servicio apagado\n' "$vox_model"
+    else
+        printf 'voxtype|partial|config sin enlazar (modelo %s)\n' "$vox_model"
+    fi
+fi
+
+# -------------------------------------------------------------
 # Neovim
 # -------------------------------------------------------------
 if [[ -d $HOME/.config/nvim/.git ]]; then

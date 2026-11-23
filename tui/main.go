@@ -48,6 +48,7 @@ func defaultItems() []item {
 		{key: "native", title: "Paquetes oficiales", desc: "pacman --needed, incluidos los de hardware"},
 		{key: "aur", title: "Paquetes AUR", desc: "yay/paru --needed"},
 		{key: "flatpak", title: "Apps Flatpak", desc: "flatpak install"},
+		{key: "voxtype", title: "Voxtype (dictado)", desc: "Opcional: paquete, config, modelo y servicio"},
 		{key: "tools", title: "Herramientas", desc: "oh-my-posh y nvm"},
 		{key: "system", title: "Servicios y grupos", desc: "systemd, grupos del usuario y unidades"},
 		{key: "nvim", title: "Neovim", desc: "clona git@github.com:sayagodev/nvim.git"},

@@ -28,7 +28,17 @@ hl.bind(mainMod .. " + j", hl.dsp.focus({ direction = "down" }), { description =
 hl.bind(mainMod .. " + SHIFT + B", hl.dsp.exec_cmd("wayscriber -a"), { description = "Activate Wayscriber" })
 hl.bind(mainMod .. " + U", hl.dsp.exec_cmd(HOME .. "/.config/tmux/menu.sh"), { description = "Tmux command menu" })
 hl.bind(mainMod .. " + SHIFT + U", hl.dsp.exec_cmd(HOME .. "/.config/hypr/scripts/skills-menu.sh"), { description = "Skills menu (opencode)" })
-hl.bind("KP_Enter", hl.dsp.exec_cmd("voxtype record toggle"), { description = "Voxtype toggle (start/stop)" })
+-- -----------------------------------------------------
+-- VOX TYPE (dictado por voz)
+-- Cambia "KP_Enter" por la tecla que quieras:
+--   "F9", "SUPER + F9", "ALT + grave", "XF86AudioMicMute"…
+-- En laptops sin teclado numérico, KP_Enter no existe: usa
+-- "SUPER + F9" o la que prefieras.
+-- El resto de ajustes está en ~/.config/voxtype/config.toml
+-- (modelo por máquina en hosts/<id>/voxtype/config.toml).
+-- -----------------------------------------------------
+local voxtypeKey = "KP_Enter"
+hl.bind(voxtypeKey, hl.dsp.exec_cmd("voxtype record toggle"), { description = "Voxtype toggle (start/stop)" })
 
 -- Fcitx5 en Wayland (Hyprland con text-input): NO poner GTK_IM_MODULE ni QT_IM_MODULE,
 -- se usa el frontend nativo Wayland. Solo XMODIFIERS para apps XWayland.
@@ -52,7 +62,7 @@ hl.on("hyprland.start", function()
 	hl.exec_cmd(HOME .. "/.config/ml4w/scripts/ml4w-toggle-no-suspend start")
 end)
 -- Push-to-talk alternativo (mantener para grabar): descomentar y cambiar toggle->start arriba
--- hl.bind("KP_Enter", hl.dsp.exec_cmd("voxtype record stop"), { description = "Voxtype PTT (stop)", release = true })
+-- hl.bind(voxtypeKey, hl.dsp.exec_cmd("voxtype record stop"), { description = "Voxtype PTT (stop)", release = true })
 
 -- RustDesk: flotante, pequeña, esquina inferior derecha
 -- (size/move relativos al monitor: se adapta a 1920x1080 y 2560x1440)

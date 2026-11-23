@@ -1,3 +1,2 @@
 opentabletdriver.service
-voxtype.service
 wayscriber.service

@@ -13,6 +13,7 @@
 #    ./install.sh --tools         # además oh-my-posh / nvm
 #    ./install.sh --system        # habilita servicios y grupos
 #    ./install.sh --nvim          # clona tu repo de Neovim
+#    ./install.sh --voxtype       # dictado opcional: paquete, modelo y servicio
 #    ./install.sh --all           # todo lo anterior
 #    ./install.sh --only links,overrides
 #                                 # solo esas categorías (lo usa la TUI)
@@ -38,6 +39,7 @@ DO_PACKAGES=0
 DO_TOOLS=0
 DO_SYSTEM=0
 DO_NVIM=0
+DO_VOXTYPE=0
 ONLY=""
 NATIVE_PKGS_SET=0
 AUR_PKGS_SET=0
@@ -57,7 +59,8 @@ while (($#)); do
         --tools) DO_TOOLS=1 ;;
         --system) DO_SYSTEM=1 ;;
         --nvim) DO_NVIM=1 ;;
-        --all) DO_PACKAGES=1; DO_TOOLS=1; DO_SYSTEM=1; DO_NVIM=1 ;;
+        --voxtype) DO_VOXTYPE=1 ;;
+        --all) DO_PACKAGES=1; DO_TOOLS=1; DO_SYSTEM=1; DO_NVIM=1; DO_VOXTYPE=1 ;;
         --only)
             [[ -n ${2:-} ]] || { echo "--only necesita una lista (ej: links,overrides)" >&2; exit 2; }
             ONLY="$2"; shift ;;
@@ -181,14 +184,17 @@ backup_path() {
     return 1
 }
 
-# link_path <ruta relativa a $HOME>
+# link_path <ruta relativa a $HOME> [origen]
+# Sin origen usa overlay/<ruta>; con origen permite enlazar ficheros
+# específicos del host (p. ej. hosts/<id>/voxtype/config.toml).
 link_path() {
     local rel="$1"
-    local src="$DOTFILES_DIR/overlay/$rel"
+    local src="${2:-$DOTFILES_DIR/overlay/$rel}"
+    local src_label="${src#"$DOTFILES_DIR/"}"
     local dst="$REAL_HOME/$rel"
 
     if [[ ! -e $src ]]; then
-        fail "falta el origen del enlace: overlay/$rel" \
+        fail "falta el origen del enlace: $src_label" \
             "El repo está incompleto: vuelve a clonarlo o revisa 'git status'"
         return
     fi
@@ -548,6 +554,112 @@ do_flatpak() {
 }
 
 # -------------------------------------------------------------
+# Voxtype (dictado por voz, opcional)
+# -------------------------------------------------------------
+voxtype_model_installed() {
+    local model="$1"
+    local dir="${XDG_DATA_HOME:-$REAL_HOME/.local/share}/voxtype/models"
+    [[ -e "$dir/ggml-$model.bin" || -e "$dir/$model" || -d "$dir/$model" ]]
+}
+
+do_voxtype() {
+    step "Voxtype (dictado por voz, opcional)"
+
+    # Config completa por máquina. El modelo vive en el propio TOML,
+    # así `voxtype setup check` y el CLI ven lo mismo que el servicio.
+    local src="$DOTFILES_DIR/hosts/$HOST/voxtype/config.toml"
+    if [[ ! -f $src ]]; then
+        warn "no hay hosts/$HOST/voxtype/config.toml; se omite voxtype"
+        warn "copia hosts/dev/voxtype/config.toml a hosts/$HOST/voxtype/ y ajusta el modelo"
+        return
+    fi
+
+    local model
+    model="$(sed -n 's/^[[:space:]]*model[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$src" | head -n1)"
+    [[ -n $model ]] || model="small"
+
+    # 1. Config del host → ~/.config/voxtype/config.toml (symlink).
+    link_path ".config/voxtype/config.toml" "$src"
+
+    # 2. Paquete AUR
+    if ! have voxtype; then
+        local helper=""
+        have yay && helper=yay
+        [[ -z $helper ]] && have paru && helper=paru
+        if [[ -z $helper ]]; then
+            fail "voxtype no está instalado y no hay helper de AUR" \
+                "Instala yay/paru y repite, o: yay -S voxtype"
+            return
+        fi
+        if ((DRY_RUN)); then
+            info "[dry-run] $helper -S --needed voxtype"
+        elif "$helper" -S --needed --noconfirm voxtype >>"$LOG_FILE" 2>&1; then
+            ok "voxtype instalado"
+        else
+            fail "no se pudo instalar voxtype" \
+                "Revisa el log: $LOG_FILE  ·  o instálalo a mano: $helper -S voxtype"
+            return
+        fi
+    else
+        ok "voxtype ya instalado"
+    fi
+
+    # 3. Dependencias de salida y de pausa de música
+    local missing=()
+    have wtype || missing+=(wtype)
+    have wl-copy || missing+=(wl-clipboard)
+    have playerctl || missing+=(playerctl)
+    if ((${#missing[@]})); then
+        if ((DRY_RUN)); then
+            info "[dry-run] sudo pacman -S --needed ${missing[*]}"
+        elif have pacman && sudo pacman -S --needed --noconfirm "${missing[@]}" >>"$LOG_FILE" 2>&1; then
+            ok "dependencias de voxtype (${missing[*]})"
+        else
+            warn "faltan dependencias de voxtype: ${missing[*]} (sudo pacman -S ${missing[*]})"
+        fi
+    else
+        ok "dependencias de salida (wtype, wl-clipboard, playerctl)"
+    fi
+
+    # 4. Modelo de Whisper declarado en el config del host
+    if ((DRY_RUN)); then
+        info "[dry-run] voxtype setup --download --model $model"
+    elif voxtype_model_installed "$model"; then
+        ok "modelo $model ya descargado"
+    elif voxtype setup --download --model "$model" --no-post-install >>"$LOG_FILE" 2>&1; then
+        ok "modelo $model descargado"
+    else
+        fail "no se pudo descargar el modelo $model" \
+            "Pruébalo a mano: voxtype setup --download --model $model"
+    fi
+
+    # 5. Servicio de usuario
+    if ! have systemctl; then
+        warn "systemctl no está disponible; no se habilita voxtype.service"
+        return
+    fi
+    if ((DRY_RUN)); then
+        info "[dry-run] systemctl --user enable --now voxtype.service"
+        return
+    fi
+
+    if ! systemctl --user enable voxtype.service >>"$LOG_FILE" 2>&1; then
+        fail "no se pudo habilitar voxtype.service" \
+            "Necesita una sesión de usuario activa: systemctl --user enable --now voxtype.service"
+        return
+    fi
+    ok "voxtype.service habilitado"
+
+    # Reinicia siempre: así se aplican cambios del TOML (modelo,
+    # idioma, meeting…) aunque el symlink no haya cambiado.
+    if systemctl --user restart voxtype.service >>"$LOG_FILE" 2>&1; then
+        ok "voxtype.service reiniciado (modelo $model)"
+    else
+        warn "no se pudo reiniciar voxtype.service; hazlo a mano: systemctl --user restart voxtype"
+    fi
+}
+
+# -------------------------------------------------------------
 # Herramientas fuera de pacman
 # -------------------------------------------------------------
 do_tools() {
@@ -762,6 +874,7 @@ should_run() {
         tools) ((DO_TOOLS)) ;;
         system) ((DO_SYSTEM)) ;;
         nvim) ((DO_NVIM)) ;;
+        voxtype) ((DO_VOXTYPE)) ;;
         *) return 1 ;;
     esac
 }
@@ -771,13 +884,13 @@ validate_only() {
     ONLY="${ONLY// /}" # tolera "links, overrides"
     # Alias cómodo: packages = native,aur,flatpak
     ONLY="${ONLY//packages/native,aur,flatpak}"
-    local key valid=",links,overrides,host,native,aur,flatpak,tools,system,nvim,"
+    local key valid=",links,overrides,host,native,aur,flatpak,tools,system,nvim,voxtype,"
     local IFS=,
     for key in $ONLY; do
         [[ -z $key ]] && continue
         if [[ $valid != *",$key,"* ]]; then
             fail "categoría desconocida en --only: $key" \
-                "Válidas: links, overrides, host, native, aur, flatpak, tools, system, nvim (o packages)"
+                "Válidas: links, overrides, host, native, aur, flatpak, tools, system, nvim, voxtype (o packages)"
             return 1
         fi
     done
@@ -800,6 +913,7 @@ main() {
     should_run flatpak && do_flatpak
     should_run tools && do_tools
     should_run system && do_system
+    should_run voxtype && do_voxtype
     should_run nvim && do_nvim
 
     summary
