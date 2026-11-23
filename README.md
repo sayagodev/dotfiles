@@ -31,7 +31,8 @@ La primera vez:
 
 1. Detecta Go. Si no está, descarga la **última estable** desde `go.dev`,
    verifica su sha256 y la extrae en `~/.local/share/dotfiles/go` (sin sudo).
-2. Compila `tui/` en `~/.local/share/dotfiles/bin/dotfiles-tui`.
+2. Compila `tui/` en `~/.local/share/dotfiles/bin/dotfiles-tui`. Sin `gum`
+   verás puntos de progreso; la primera compilación puede tardar.
 3. Usa [gum](https://github.com/charmbracelet/gum) para confirmaciones,
    spinners y el selector de paquetes si está disponible (ya viene en
    `packages/native.txt`).
@@ -77,6 +78,11 @@ shell nuevo).
 `install.sh` es idempotente y **no aborta al primer error**: cada acción
 sale en verde/rojo con una pista, y al final hay un resumen. El log queda en
 `~/.local/state/dotfiles/install.log`.
+
+Si la selección incluye paquetes, AUR, flatpak, servicios o voxtype, `sudo`
+pide la contraseña **al principio** y la mantiene viva mientras dura la
+instalación. La salida de pacman/yay/flatpak se muestra en pantalla y se
+guarda en el log.
 
 ## Voxtype (dictado por voz, opcional)
 
@@ -266,9 +272,9 @@ tui/                        TUI en Go (bubbletea + bubbles + lipgloss)
 lib/manifest.sh             fuente única de las rutas que se gestionan
 overlay/                    espejo de $HOME; se enlaza con symlinks
   .bash_profile             source de .bashrc + bun
-  .bashrc_custom            ble-attach final (debe cargarse el último)
+  .bashrc_custom            carga bashrc-custom + ble-attach final
   .blerc                    config de ble.sh (vi mode, autocompletado, ruler)
-  .config/bashrc-custom     aliases, funciones, exports, PATHs
+  .config/bashrc-custom     aliases, funciones, exports y Ctrl+O
   .config/bashrc/custom/    override del hook de ML4W (ble.sh temprano)
   .config/hypr/custom.lua   binds, input (US intl), fcitx, autostart
   .config/hypr/scripts/     skills-menu.sh
@@ -379,6 +385,9 @@ actualiza `.upstream/`.
   `custom.lua`, no en `input.lua`, para sobrevivir a los updates.
 - **ble.sh** se carga temprano desde `bashrc/custom/00-init` y se engancha
   al final en `.bashrc_custom`. Ese orden es obligatorio.
+- **`bashrc-custom`** se carga desde `.bashrc_custom`, con guarda contra
+  doble carga. ML4W nuevo dejó de sourcearlo en `20-customization`; así los
+  alias, funciones y `Ctrl+O` no dependen de la versión de ML4W.
 - **oh-my-posh** se inicializa una sola vez (en `20-customization` de
   ML4W). Antes se inicializaba dos veces.
 - **`alias c`** pisa el `c='clear'` de ML4W a propósito (`unalias` explícito

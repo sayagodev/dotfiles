@@ -673,6 +673,7 @@ func (m model) viewConfirm() string {
 		b.WriteString("\n" + partialStyle.Render("  MODO DRY-RUN: se mostrará el plan, sin escribir.") + "\n")
 	} else {
 		b.WriteString("\n" + successStyle.Render("  Se aplicará de verdad (con backup de lo que reemplace).") + "\n")
+		b.WriteString(subStyle.Render("  Si hay paquetes o servicios, sudo pedirá la contraseña al empezar.") + "\n")
 	}
 	if m.message != "" {
 		b.WriteString("\n" + messageStyle.Render(m.message) + "\n")
@@ -685,12 +686,12 @@ func (m model) viewDone() string {
 	var b strings.Builder
 	if m.execErr != nil {
 		b.WriteString(errorStyle.Render("✘ La instalación terminó con error") + "\n\n")
-		b.WriteString("Revisa el resumen de arriba y el log:\n")
-		b.WriteString(subStyle.Render("  ~/.local/state/dotfiles/install.log") + "\n")
+		b.WriteString("Revisa el log para ver qué pasó:\n")
 	} else {
 		b.WriteString(successStyle.Render("✔ Listo") + "\n\n")
 		b.WriteString("Abre un shell nuevo y recarga Hyprland (SUPER + SHIFT + R).\n")
 	}
+	b.WriteString(subStyle.Render("  ~/.local/state/dotfiles/install.log") + "\n")
 	b.WriteString("\n" + helpStyle.Render("enter para salir"))
 	return b.String()
 }

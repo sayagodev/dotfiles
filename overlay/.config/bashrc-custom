@@ -1,9 +1,14 @@
 # -----------------------------------------------------
 # CUSTOMIZATION
 # -----------------------------------------------------
-# Lo carga ~/.config/bashrc/20-customization (ML4W), antes de
-# 30-autostart. El ble-attach final vive en ~/.bashrc_custom.
+# Lo carga ~/.config/bashrc/20-customization en ML4W antiguo y
+# ~/.bashrc_custom en el nuevo (que ya no lo hace). La guarda evita
+# cargarlo dos veces.
+# El ble-attach final vive en ~/.bashrc_custom.
 # -----------------------------------------------------
+[[ -n ${DOTFILES_BASHRC_CUSTOM_LOADED-} ]] && return 0
+DOTFILES_BASHRC_CUSTOM_LOADED=1
+
 POSH=agnoster
 
 # Fcitx5: NO exportar GTK_IM_MODULE. SDDM ejecuta el login con

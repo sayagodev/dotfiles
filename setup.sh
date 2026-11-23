@@ -33,6 +33,30 @@ die()  { printf '  %s✘%s %s\n' "$R" "$N" "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 gum_on() { have gum && [[ -t 0 && -t 1 ]]; }
 
+# Ejecuta un comando mostrando puntos mientras tarda (sin gum).
+run_progress() { # <título> <comando...>
+    local title="$1" tmp rc pid
+    shift
+    tmp="$(mktemp)"
+    "$@" >"$tmp" 2>&1 &
+    pid=$!
+    printf '  %s::%s %s ' "$B" "$N" "$title" >&2
+    while kill -0 "$pid" 2>/dev/null; do
+        printf '.' >&2
+        sleep 1
+    done
+    wait "$pid"
+    rc=$?
+    if ((rc == 0)); then
+        printf ' %s✔%s\n' "$G" "$N" >&2
+    else
+        printf ' %s✘%s\n' "$R" "$N" >&2
+        sed 's/^/    /' "$tmp" >&2
+    fi
+    rm -f "$tmp"
+    return "$rc"
+}
+
 # -------------------------------------------------------------
 # Argumentos
 # -------------------------------------------------------------
@@ -167,12 +191,15 @@ needs_build() {
 
 build_tui() {
     mkdir -p "$DATA_DIR/bin" || die "no pude crear $DATA_DIR/bin"
-    info "compilando TUI con $( "$GO_BIN" version | awk '{print $3}' )…"
+    local ver
+    ver="$("$GO_BIN" version | awk '{print $3}')"
     if gum_on; then
+        info "compilando TUI con $ver…"
         ( cd "$ROOT/tui" && gum spin --spinner dot --title "Compilando TUI…" -- \
             "$GO_BIN" build -o "$BIN" . ) || die "falló la compilación (prueba ./setup.sh --classic)"
     else
-        ( cd "$ROOT/tui" && "$GO_BIN" build -o "$BIN" . ) \
+        run_progress "compilando TUI con $ver (la primera vez puede tardar)" \
+            bash -c 'cd "$1" && exec "$2" build -o "$3" .' _ "$ROOT/tui" "$GO_BIN" "$BIN" \
             || die "falló la compilación (prueba ./setup.sh --classic)"
     fi
     ok "TUI lista en $BIN"

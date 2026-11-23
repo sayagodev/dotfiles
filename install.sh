@@ -146,6 +146,56 @@ fail() {
 have() { command -v "$1" >/dev/null 2>&1; }
 
 # -------------------------------------------------------------
+# sudo y salida en vivo
+# -------------------------------------------------------------
+SUDO_KEEPALIVE_PID=""
+cleanup() {
+    [[ -n $SUDO_KEEPALIVE_PID ]] || return 0
+    kill "$SUDO_KEEPALIVE_PID" 2>/dev/null
+    SUDO_KEEPALIVE_PID=""
+}
+trap cleanup EXIT
+
+# ¿Esta pasada va a necesitar sudo?
+needs_sudo() {
+    local list=",${ONLY// /},"
+    list="${list//packages/,native,aur,flatpak,}"
+    if [[ -n $ONLY ]]; then
+        [[ $list == *,native,* || $list == *,aur,* ||
+           $list == *,flatpak,* || $list == *,system,* ]] && return 0
+        [[ $list == *,voxtype,* ]] || return 1
+    else
+        ((DO_PACKAGES || DO_SYSTEM)) && return 0
+        ((DO_VOXTYPE)) || return 1
+    fi
+    # voxtype solo pide sudo si falta el paquete o una dependencia.
+    ! have voxtype || ! have wtype || ! have wl-copy || ! have playerctl
+}
+
+# Pide la contraseña al principio y mantiene vivo el timestamp para que
+# las compilaciones AUR largas no la vuelvan a pedir a mitad.
+start_sudo() {
+    ((DRY_RUN)) && return 0
+    needs_sudo || return 0
+    info "validando sudo ahora (la contraseña se pide una sola vez)…"
+    if ! sudo -v; then
+        warn "sudo no validado; las acciones que lo necesiten fallarán con su pista"
+        return 0
+    fi
+    ok "sudo validado"
+    ( while sleep 50; do sudo -n -v 2>/dev/null || exit 0; done ) &
+    SUDO_KEEPALIVE_PID=$!
+}
+
+# Ejecuta un comando mostrando su salida y guardándola en el log.
+run_logged() {
+    local desc="$1"
+    shift
+    info "$desc…"
+    "$@" 2>&1 | tee -a "$LOG_FILE"
+}
+
+# -------------------------------------------------------------
 # Acciones
 # -------------------------------------------------------------
 # run_action <desc> <pista> <cmd...>
@@ -460,7 +510,8 @@ do_native() {
         info "0 paquetes oficiales seleccionados"
     elif ((DRY_RUN)); then
         info "[dry-run] sudo pacman -S --needed $count paquetes oficiales"
-    elif sudo pacman -S --needed --noconfirm $pkgs >>"$LOG_FILE" 2>&1; then
+    elif run_logged "instalando $count paquetes oficiales (puede tardar)" \
+        sudo pacman -S --needed --noconfirm $pkgs; then
         ok "paquetes oficiales ($count)"
     else
         fail "algunos paquetes oficiales fallaron" \
@@ -475,7 +526,8 @@ do_native() {
         hp="$(tr '\n' ' ' <"$host_pkgs")"
         if ((DRY_RUN)); then
             info "[dry-run] sudo pacman -S --needed $(wc -l <"$host_pkgs") paquetes de $HOST"
-        elif sudo pacman -S --needed --noconfirm $hp >>"$LOG_FILE" 2>&1; then
+        elif run_logged "instalando paquetes de hardware ($HOST)" \
+            sudo pacman -S --needed --noconfirm $hp; then
             ok "paquetes de hardware ($HOST)"
         else
             fail "paquetes de hardware ($HOST) fallaron" \
@@ -511,7 +563,8 @@ do_aur() {
             "Instala uno: sudo pacman -S --needed base-devel git && git clone https://aur.archlinux.org/yay-bin.git && cd yay-bin && makepkg -si"
     elif ((DRY_RUN)); then
         info "[dry-run] $helper -S --needed $count paquetes AUR"
-    elif "$helper" -S --needed --noconfirm $aur >>"$LOG_FILE" 2>&1; then
+    elif run_logged "instalando $count paquetes AUR con $helper (compilaciones pueden tardar)" \
+        "$helper" -S --needed --noconfirm $aur; then
         ok "paquetes AUR ($count)"
     else
         fail "algunos paquetes AUR fallaron" \
@@ -545,7 +598,8 @@ do_flatpak() {
 
     if ((DRY_RUN)); then
         info "[dry-run] flatpak install $count apps"
-    elif flatpak install -y --noninteractive $fps >>"$LOG_FILE" 2>&1; then
+    elif run_logged "instalando $count apps flatpak" \
+        flatpak install -y --noninteractive $fps; then
         ok "apps flatpak ($count)"
     else
         fail "algunas apps flatpak fallaron" \
@@ -593,7 +647,8 @@ do_voxtype() {
         fi
         if ((DRY_RUN)); then
             info "[dry-run] $helper -S --needed voxtype"
-        elif "$helper" -S --needed --noconfirm voxtype >>"$LOG_FILE" 2>&1; then
+        elif run_logged "instalando voxtype desde AUR" \
+            "$helper" -S --needed --noconfirm voxtype; then
             ok "voxtype instalado"
         else
             fail "no se pudo instalar voxtype" \
@@ -612,7 +667,8 @@ do_voxtype() {
     if ((${#missing[@]})); then
         if ((DRY_RUN)); then
             info "[dry-run] sudo pacman -S --needed ${missing[*]}"
-        elif have pacman && sudo pacman -S --needed --noconfirm "${missing[@]}" >>"$LOG_FILE" 2>&1; then
+        elif have pacman && run_logged "instalando dependencias de voxtype" \
+            sudo pacman -S --needed --noconfirm "${missing[@]}"; then
             ok "dependencias de voxtype (${missing[*]})"
         else
             warn "faltan dependencias de voxtype: ${missing[*]} (sudo pacman -S ${missing[*]})"
@@ -626,7 +682,8 @@ do_voxtype() {
         info "[dry-run] voxtype setup --download --model $model"
     elif voxtype_model_installed "$model"; then
         ok "modelo $model ya descargado"
-    elif voxtype setup --download --model "$model" --no-post-install >>"$LOG_FILE" 2>&1; then
+    elif run_logged "descargando modelo $model" \
+        voxtype setup --download --model "$model" --no-post-install; then
         ok "modelo $model descargado"
     else
         fail "no se pudo descargar el modelo $model" \
@@ -775,7 +832,7 @@ do_nvim() {
         info "[dry-run] git clone $repo $dst"
         return
     fi
-    if git clone "$repo" "$dst" >>"$LOG_FILE" 2>&1; then
+    if run_logged "clonando $repo" git clone "$repo" "$dst"; then
         ok "nvim clonado desde $repo"
     else
         fail "no se pudo clonar el repo de nvim" \
@@ -820,6 +877,8 @@ preflight() {
     if [[ ! -d $DOTFILES_DIR/overrides ]]; then
         fail "no existe overrides/ en el repo" "El repo está incompleto"
     fi
+
+    start_sudo
 }
 
 # -------------------------------------------------------------

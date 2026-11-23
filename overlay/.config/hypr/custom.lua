@@ -19,6 +19,7 @@ hl.config({
 })
 
 hl.unbind(mainMod .. " + K", hl.dsp.layout("swapsplit"), { description = "Swapsplit" })
+hl.unbind(mainMod .. " + J", hl.dsp.layout("togglesplit"), { description = "Toggle split" })
 
 hl.bind(mainMod .. " + h", hl.dsp.focus({ direction = "left" }), { description = "Move focus left" })
 hl.bind(mainMod .. " + l", hl.dsp.focus({ direction = "right" }), { description = "Move focus right" })

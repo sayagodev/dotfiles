@@ -3,6 +3,12 @@
 # (la pone ble.sh con prompt_ruler en los siguientes). Con guarda para no
 # manchar la salida de shells no interactivos.
 [[ $- == *i* ]] && echo
+
+# Config propia (aliases, funciones, Ctrl+O de lfcd…).
+# ML4W nuevo ya no la carga desde 20-customization; la guarda de
+# bashrc-custom evita duplicarla en ML4W antiguo.
+[[ -f $HOME/.config/bashrc-custom ]] && source "$HOME/.config/bashrc-custom"
+
 # ble.sh: activar el line editor AL FINAL de toda la config.
 # Este fichero lo carga el loader de ML4W después de ~/.config/bashrc/*.
 [[ ! ${BLE_VERSION-} ]] || ble-attach
