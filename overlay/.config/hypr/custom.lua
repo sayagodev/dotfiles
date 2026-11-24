@@ -16,6 +16,13 @@ hl.config({
 		sensitivity = 0,
 		touchpad = { natural_scroll = true },
 	},
+	render = {
+		-- HDR automático en fullscreen: en DP-3 (GGF MG701) el cambio
+		-- de infoframe HDR hace que nvidia-drm pierda el flip y la
+		-- pantalla se quede negra, con el vídeo descolorido y a tirones.
+		-- El monitor anuncia HDR400, pero se ve mejor en SDR.
+		cm_auto_hdr = 0,
+	},
 })
 
 hl.unbind(mainMod .. " + K", hl.dsp.layout("swapsplit"), { description = "Swapsplit" })

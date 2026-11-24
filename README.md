@@ -383,6 +383,11 @@ actualiza `.upstream/`.
   `hosts/laptop` sin pisarse monitores ni paquetes de hardware.
 - **Teclado US internacional** (`us` + `intl` + `lv3:lalt_switch`) vive en
   `custom.lua`, no en `input.lua`, para sobrevivir a los updates.
+- **HDR automático desactivado** (`render:cm_auto_hdr = 0`): en DP-3 el
+  cambio de infoframe HDR provoca `Flip event timeout` en `nvidia-drm`
+  (pantalla negra y vídeo descolorido). El monitor anuncia HDR400, pero se
+  usa SDR. Para probar HDR:
+  `hyprctl eval 'hl.config({ render = { cm_auto_hdr = 1 } })'`.
 - **ble.sh** se carga temprano desde `bashrc/custom/00-init` y se engancha
   al final en `.bashrc_custom`. Ese orden es obligatorio.
 - **`bashrc-custom`** se carga desde `.bashrc_custom`, con guarda contra
