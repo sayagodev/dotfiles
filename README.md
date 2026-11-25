@@ -238,8 +238,9 @@ Regla al añadir algo nuevo:
 - `--tools`: `bootstrap/tools.sh` → oh-my-posh **29.36.0** en
   `~/.local/bin` y nvm **v0.40.4** en `~/.nvm`; avisa (sin fallar) de
   bun, pnpm, rustup, opencode, claude, codex, lf y hunk.
-- `--system`: habilita los 17 servicios de `system/services.txt`, añade
-  los 6 grupos de `system/groups.txt` y las 2 unidades de usuario.
+- `--system`: habilita los 18 servicios de `system/services.txt` (incluido
+  `power-profiles-daemon`, que Quickshell necesita en marcha al iniciar la
+  sesión), añade los 6 grupos de `system/groups.txt` y las 2 unidades de usuario.
 - `--nvim`: clona `git@github.com:sayagodev/nvim.git` si no existe.
 - `--voxtype`: dictado opcional. Instala `voxtype` desde AUR, sus
   dependencias, el modelo de `hosts/<perfil>/voxtype/config.toml` y

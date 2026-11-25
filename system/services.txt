@@ -9,6 +9,7 @@ libvirtd.socket
 mariadb.service
 NetworkManager.service
 ollama.service
+power-profiles-daemon.service
 rustdesk.service
 sddm.service
 virtlockd-admin.socket
