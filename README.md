@@ -185,6 +185,38 @@ Documentación oficial: [modelos](https://voxtype.io/docs/MODEL_SELECTION_GUIDE)
 [configuración](https://voxtype.io/docs/CONFIGURATION) y
 [Parakeet](https://voxtype.io/docs/PARAKEET).
 
+## RustDesk (Wayland, opcional)
+
+RustDesk normal no permite acceso desatendido en Wayland. La instalación
+usa el paquete AUR `rustdesk-unattended-wayland` (nightly con captura por
+PipeWire y `libdrmtap`), ya incluido en `packages/aur.txt`, y habilita
+`rustdesk.service`, ya incluido en `system/services.txt`.
+
+```bash
+./install.sh --only aur,system   # paquete + servicio al arranque
+```
+
+Notas de funcionamiento:
+
+- El servicio corre como root y captura la pantalla por PipeWire/portal.
+  La primera conexión pide permiso; concédelo una vez.
+- Si el compositor sigue pidiendo permiso, ejecuta `rustdesk --service`
+  dentro de la sesión y vuelve a probar.
+- Para acceso desatendido, define una contraseña permanente en RustDesk
+  (Ajustes → Seguridad). La opción
+  `verification-method = 'use-permanent-password'` vive en
+  `~/.config/rustdesk/RustDesk2.toml`.
+
+### Configuración y secretos
+
+`~/.config/rustdesk/` (`RustDesk.toml`, `RustDesk2.toml`,
+`RustDesk_local.toml`, `RustDesk_group` y `peers/`) contiene el ID, la
+clave privada, el hash de la contraseña y el token de acceso. **No se
+versiona**: el repo es público y con esos datos se puede acceder al equipo.
+Si quieres conservar el ID y los dispositivos de confianza al reinstalar,
+guarda una copia privada (gestor de contraseñas o disco cifrado), nunca en
+`~/dotfiles`.
+
 ## Modelo de capas
 
 ```
@@ -309,6 +341,7 @@ usuario y unidades de usuario. Se aplican con `--system`.
 - Colores de matugen, GTK/kitty/swaync generados por el tema y wallpapers
   salvo `shobun.jpg`.
 - Historiales, cachés, `.nvm`, `~/.local/bin`, `~/.config/gh`, claves SSH.
+- `~/.config/rustdesk/`: ID, clave privada, contraseña y token de acceso.
 - Modelos de voxtype (`~/.local/share/voxtype/models`): pesan cientos de
   MB y se descargan con `./install.sh --only voxtype`.
 - Binarios grandes (`oh-my-posh`, `ocx`). Se reinstalan con
