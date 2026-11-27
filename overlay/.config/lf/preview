@@ -1,0 +1,326 @@
+#!/usr/bin/env bash
+# =============================================================
+#  Previewer de lf para kitty
+#
+#  lf llama a este script con:
+#    $1 fichero · $2 ancho · $3 alto · $4 x · $5 y · $6 preview|preload
+#
+#  Imágenes, PDF y vídeo se dibujan con el protocolo gráfico de
+#  kitty (kitten icat). El resto se muestra como texto coloreado.
+#  Sale con 1 cuando dibuja en /dev/tty para que lf no cachee la
+#  salida vacía y vuelva a llamar al cambiar de selección.
+# =============================================================
+set -uo pipefail
+
+FILE=${1-}
+WIDTH=${2:-80}
+HEIGHT=${3:-24}
+X=${4:-0}
+Y=${5:-0}
+MODE=${6:-preview}
+
+[[ -n $FILE && -e $FILE ]] || exit 1
+((WIDTH > 0 && HEIGHT > 0)) || exit 1
+
+# lf dibuja los directorios; aquí no hay nada que previsualizar.
+[[ -d $FILE ]] && exit 0
+
+# Solo se previsualizan ficheros regulares; evita bloquearse con FIFOs,
+# sockets o dispositivos.
+if [[ ! -f $FILE ]]; then
+    ls -ld -- "$FILE" 2>/dev/null || true
+    exit 0
+fi
+[[ -r $FILE ]] || { printf 'Sin permiso de lectura: %s\n' "$FILE"; exit 0; }
+
+# -------------------------------------------------------------
+# Caché de miniaturas (PDF, vídeo, SVG y portadas de audio)
+# -------------------------------------------------------------
+CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/lf/preview
+if ! mkdir -p -- "$CACHE_DIR" 2>/dev/null; then
+    CACHE_DIR=${TMPDIR:-/tmp}/lf-preview-${UID}
+    mkdir -p -- "$CACHE_DIR" 2>/dev/null || exit 1
+fi
+
+# Limpieza perezosa: una vez al día, borra miniaturas de más de 7 días.
+STAMP=$CACHE_DIR/.cleanup
+if [[ ! -e $STAMP ]] || [[ -n $(find "$STAMP" -mmin +1440 2>/dev/null) ]]; then
+    : >"$STAMP" 2>/dev/null || true
+    find "$CACHE_DIR" -maxdepth 1 -type f -mtime +7 ! -name .cleanup \
+        -delete 2>/dev/null || true
+fi
+
+cache_for() {
+    local kind=$1 key
+    key=$(stat -Lc '%n|%s|%Y|%i' -- "$FILE" 2>/dev/null | sha256sum | cut -d' ' -f1)
+    printf '%s/%s-%s.png\n' "$CACHE_DIR" "$kind" "$key"
+}
+
+# -------------------------------------------------------------
+# Detección de kitty y dibujo
+# -------------------------------------------------------------
+CAN_DRAW=0
+if command -v kitten >/dev/null 2>&1 && (exec 3>/dev/tty) 2>/dev/null; then
+    if [[ -n ${KITTY_WINDOW_ID:-} || ${TERM:-} == xterm-kitty || -n ${KITTY_LISTEN_ON:-} ]]; then
+        CAN_DRAW=1
+    fi
+fi
+
+# En modo preload no se pinta nada: lf volverá a llamar al seleccionar.
+graphics_preload_guard() {
+    [[ $MODE == preload ]] && exit 1
+}
+
+# draw <imagen>: dibuja y sale con 1 (sin caché) si todo va bien.
+# --transfer-mode file evita el problema de lf con la memoria compartida:
+# lf puede consumir la respuesta del terminal y la imagen no se pinta.
+draw() {
+    graphics_preload_guard
+    [[ $CAN_DRAW == 1 ]] || return 1
+
+    if kitten icat --stdin no --transfer-mode file --silent \
+        --place "${WIDTH}x${HEIGHT}@${X}x${Y}" \
+        -- "$1" </dev/null >/dev/tty 2>/dev/null; then
+        exit 1
+    fi
+    return 1
+}
+
+# -------------------------------------------------------------
+# Utilidades de metadatos
+# -------------------------------------------------------------
+file_info() {
+    file -Lb -- "$FILE" 2>/dev/null || true
+    ls -lh -- "$FILE" 2>/dev/null | awk '{ print "Tamaño: " $5 }'
+}
+
+media_info() {
+    if command -v ffprobe >/dev/null 2>&1; then
+        ffprobe -v error -show_entries \
+            format=format_name,duration,bit_rate,size:format_tags=title,artist,album,date,genre \
+            -of default=noprint_wrappers=1 -- "$FILE" </dev/null 2>/dev/null |
+            head -n "$HEIGHT"
+    else
+        file_info
+    fi
+}
+
+image_info() {
+    if command -v identify >/dev/null 2>&1; then
+        identify -format 'Formato: %m\nDimensiones: %wx%h\nEspacio de color: %[colorspace]\n' \
+            "$FILE[0]" 2>/dev/null || true
+    fi
+    ls -lh -- "$FILE" 2>/dev/null | awk '{ print "Tamaño: " $5 }'
+}
+
+# -------------------------------------------------------------
+# Texto
+# -------------------------------------------------------------
+preview_text() {
+    if command -v bat >/dev/null 2>&1; then
+        bat --color=always --style=numbers --paging=never \
+            --line-range=1:400 --terminal-width="$WIDTH" -- "$FILE" 2>/dev/null || true
+    elif command -v pygmentize >/dev/null 2>&1; then
+        # Pygments no tiene --line-range: en ficheros grandes, texto plano.
+        if [[ $(stat -Lc '%s' -- "$FILE" 2>/dev/null || echo 0) -gt 2097152 ]]; then
+            sed -n '1,400p' -- "$FILE" 2>/dev/null || true
+        else
+            local lexer
+            lexer=$(pygmentize -N "$FILE" 2>/dev/null) || lexer=text
+            pygmentize -l "$lexer" -f terminal256 -O style=monokai \
+                -- "$FILE" 2>/dev/null || true
+        fi
+    else
+        sed -n '1,400p' -- "$FILE" 2>/dev/null || true
+    fi
+    exit 0
+}
+
+# -------------------------------------------------------------
+# Archivos comprimidos
+# -------------------------------------------------------------
+preview_archive() {
+    local out=""
+    if command -v bsdtar >/dev/null 2>&1; then
+        out=$(bsdtar -tf "$FILE" </dev/null 2>/dev/null | head -n 400) || true
+    fi
+    if [[ -z $out ]] && command -v unzip >/dev/null 2>&1; then
+        out=$(unzip -l -- "$FILE" </dev/null 2>/dev/null | head -n 400) || true
+    fi
+    if [[ -n $out ]]; then
+        printf '%s\n' "$out"
+        exit 0
+    fi
+    file_info
+    exit 0
+}
+
+# -------------------------------------------------------------
+# Imágenes (incluido SVG)
+# -------------------------------------------------------------
+preview_svg() {
+    local out
+    graphics_preload_guard
+    out=$(cache_for svg)
+    if [[ ! -s $out ]]; then
+        if command -v rsvg-convert >/dev/null 2>&1; then
+            rsvg-convert -w 1600 -o "$out" -- "$FILE" </dev/null 2>/dev/null || rm -f -- "$out"
+        elif command -v magick >/dev/null 2>&1; then
+            magick -- "$FILE" -resize '1600x1600>' "$out" </dev/null 2>/dev/null || rm -f -- "$out"
+        fi
+    fi
+    draw "$out" || preview_text
+}
+
+preview_image() {
+    draw "$FILE" || image_info
+    exit 0
+}
+
+# -------------------------------------------------------------
+# PDF: primera página rasterizada
+# -------------------------------------------------------------
+preview_pdf() {
+    local out
+    graphics_preload_guard
+    out=$(cache_for pdf)
+    if [[ ! -s $out ]] && command -v pdftoppm >/dev/null 2>&1; then
+        pdftoppm -png -f 1 -l 1 -singlefile -scale-to 1600 \
+            "$FILE" "${out%.png}" </dev/null 2>/dev/null || rm -f -- "$out"
+    fi
+    if [[ -s $out ]]; then
+        draw "$out" || true
+    fi
+    if command -v pdfinfo >/dev/null 2>&1; then
+        pdfinfo -- "$FILE" </dev/null 2>/dev/null | head -n "$HEIGHT"
+    else
+        file_info
+    fi
+    exit 0
+}
+
+# -------------------------------------------------------------
+# Vídeo: miniatura del 10 % de la duración
+# -------------------------------------------------------------
+preview_video() {
+    local out duration seek=1
+    graphics_preload_guard
+    out=$(cache_for video)
+    if [[ ! -s $out ]] && command -v ffmpeg >/dev/null 2>&1; then
+        duration=$(ffprobe -v error -show_entries format=duration \
+            -of default=nw=1:nk=1 -- "$FILE" </dev/null 2>/dev/null || true)
+        if [[ -n $duration ]] &&
+           awk -v d="$duration" 'BEGIN { exit !(d > 10) }'; then
+            seek=$(awk -v d="$duration" 'BEGIN { printf "%.3f", d / 10 }')
+        fi
+        ffmpeg -v error -ss "$seek" -i "$FILE" -frames:v 1 \
+            -vf "scale='min(1600,iw)':-2" -y "$out" </dev/null 2>/dev/null ||
+            ffmpeg -v error -i "$FILE" -frames:v 1 \
+                -vf "scale='min(1600,iw)':-2" -y "$out" </dev/null 2>/dev/null ||
+            rm -f -- "$out"
+    fi
+    if [[ -s $out ]]; then
+        draw "$out" || true
+    fi
+    media_info
+    exit 0
+}
+
+# -------------------------------------------------------------
+# Audio: portada incrustada o metadatos
+# -------------------------------------------------------------
+preview_audio() {
+    local out
+    graphics_preload_guard
+    out=$(cache_for cover)
+    if [[ ! -s $out ]] && command -v ffmpeg >/dev/null 2>&1; then
+        ffmpeg -v error -i "$FILE" -map 0:v:0 -frames:v 1 -y "$out" </dev/null 2>/dev/null ||
+            rm -f -- "$out"
+    fi
+    if [[ -s $out ]]; then
+        draw "$out" || true
+    fi
+    media_info
+    exit 0
+}
+
+# -------------------------------------------------------------
+# Fuentes
+# -------------------------------------------------------------
+preview_font() {
+    if command -v fc-scan >/dev/null 2>&1; then
+        fc-scan --format '%{family}\n%{style}\n%{fullname}\n%{foundry}\n' \
+            -- "$FILE" 2>/dev/null | head -n "$HEIGHT"
+    else
+        file_info
+    fi
+    exit 0
+}
+
+# -------------------------------------------------------------
+# Dispatch por extensión (antes que el MIME)
+# -------------------------------------------------------------
+EXT=${FILE##*.}
+[[ $EXT == "$FILE" ]] && EXT=""
+EXT=${EXT,,}
+BASE=${FILE##*/}
+
+case "$EXT" in
+    pdf) preview_pdf ;;
+    svg) preview_svg ;;
+    jpg|jpeg|png|gif|webp|bmp|tif|tiff|ico|avif|heic|heif|jxl)
+        preview_image ;;
+    mp4|m4v|mkv|webm|mov|avi|mpg|mpeg|flv|ogv|wmv|3gp)
+        preview_video ;;
+    mp3|flac|ogg|oga|opus|wav|m4a|aac|wma|aiff|aif|mka|wv)
+        preview_audio ;;
+    zip|tar|tgz|tbz|tbz2|txz|tlz|7z|rar|gz|bz2|xz|zst|lz|lz4|lzma|z|\
+    cab|deb|rpm|iso|jar|war|apk|epub|cbz|cbr|cb7|cbt)
+        preview_archive ;;
+    ttf|otf|ttc|woff|woff2) preview_font ;;
+esac
+
+case "$BASE" in
+    Dockerfile|Containerfile|Makefile|GNUmakefile|Rakefile|Gemfile|Vagrantfile|PKGBUILD)
+        preview_text ;;
+esac
+
+# -------------------------------------------------------------
+# Dispatch por MIME
+# -------------------------------------------------------------
+MIME=$(file -Lb --mime-type -- "$FILE" 2>/dev/null || true)
+
+case "$MIME" in
+    text/*|application/json|application/xml|application/x-shellscript|\
+    application/javascript|application/x-perl|application/x-ruby|\
+    application/x-python)
+        preview_text ;;
+    image/svg+xml) preview_svg ;;
+    image/*) preview_image ;;
+    application/pdf) preview_pdf ;;
+    video/*) preview_video ;;
+    audio/*) preview_audio ;;
+    application/zip|application/gzip|application/x-7z-compressed|\
+    application/x-rar|application/x-tar|application/x-bzip2|application/x-xz|\
+    application/x-zstd)
+        preview_archive ;;
+    application/x-executable|application/x-pie-executable|application/x-sharedlib)
+        if command -v readelf >/dev/null 2>&1; then
+            readelf -WCh -- "$FILE" 2>/dev/null | head -n "$HEIGHT"
+        else
+            file_info
+        fi
+        exit 0 ;;
+    inode/x-empty)
+        printf '(fichero vacío)\n'
+        exit 0 ;;
+esac
+
+# -------------------------------------------------------------
+# Fallback
+# -------------------------------------------------------------
+file_info
+if command -v xxd >/dev/null 2>&1; then
+    xxd -l 512 -- "$FILE" 2>/dev/null | head -n "$HEIGHT"
+fi
+exit 0

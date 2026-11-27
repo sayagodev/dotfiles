@@ -1,0 +1,26 @@
+# =============================================================
+#  lf — configuración personal (repo dotfiles)
+#
+#  Las previsualizaciones usan el protocolo gráfico nativo de
+#  kitty para imágenes, PDF y vídeo; el resto es texto coloreado.
+# =============================================================
+
+# Panel de previsualización a la derecha.
+set preview
+set previewer ~/.config/lf/preview
+set cleaner ~/.config/lf/cleaner
+
+# Prepara las previsualizaciones de texto mientras te mueves.
+# Las gráficas se generan solo al seleccionarlas (ver preview).
+set preload
+
+# Reparto de anchos: directorios · padre · preview.
+set ratios 1:2:3
+
+# Al salir, retira las imágenes que kitty haya dejado ancladas.
+cmd on-quit ${{
+    if [ -n "${KITTY_WINDOW_ID:-}" ] || [ "${TERM:-}" = xterm-kitty ]; then
+        kitten icat --clear --stdin no --transfer-mode file \
+            </dev/null >/dev/tty 2>/dev/null || true
+    fi
+}}

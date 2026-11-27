@@ -46,6 +46,8 @@ BASH_FILES=(
     "overlay/.config/bashrc/custom/00-init"
     "overlay/.config/ml4w/scripts/ml4w-toggle-no-suspend"
     "overlay/.config/tmux/menu.sh"
+    "overlay/.config/lf/preview"
+    "overlay/.config/lf/cleaner"
     "overrides/ml4w/settings/browser.sh"
     "overrides/ml4w/settings/editor.sh"
     "overrides/ml4w/settings/terminal.sh"

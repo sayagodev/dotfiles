@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# =============================================================
+#  Cleaner de lf para kitty
+#
+#  lf lo llama antes de repintar cuando la previsualización
+#  anterior no estaba cacheada (imágenes, PDF, vídeo, audio).
+#  Retira las imágenes que kitty tiene ancladas a la pantalla.
+# =============================================================
+set -uo pipefail
+
+[[ -c /dev/tty ]] || exit 0
+command -v kitten >/dev/null 2>&1 || exit 0
+
+# Fuera de kitty no hay nada que limpiar.
+if [[ -z ${KITTY_WINDOW_ID:-} && ${TERM:-} != xterm-kitty && -z ${KITTY_LISTEN_ON:-} ]]; then
+    exit 0
+fi
+
+# Solo intenta limpiar si /dev/tty se puede abrir de verdad.
+(exec 3>/dev/tty) 2>/dev/null || exit 0
+
+kitten icat --clear --stdin no --transfer-mode file \
+    </dev/null >/dev/tty 2>/dev/null || true
+
+exit 0

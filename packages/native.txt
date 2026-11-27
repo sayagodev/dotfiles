@@ -7,6 +7,7 @@ autoconf-archive
 awww
 base
 base-devel
+bat
 blueman
 bluez-utils
 breeze
@@ -37,6 +38,7 @@ fcitx5-gtk
 fcitx5-pinyin-zhwiki
 fcitx5-qt
 feh
+ffmpeg
 figlet
 firefox
 flatpak
@@ -111,6 +113,7 @@ pipewire-alsa
 pipewire-pulse
 plasma-meta
 polkit-gnome
+poppler
 power-profiles-daemon
 python-pip
 qbittorrent

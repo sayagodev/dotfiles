@@ -31,6 +31,7 @@ LINKED=(
     ".config/ml4w/scripts/ml4w-toggle-no-suspend"
     ".config/ml4w/wallpapers/shobun.jpg"
     ".config/tmux"
+    ".config/lf"
     ".config/fcitx5"
     ".config/kanata"
     ".config/environment.d/10-fcitx.conf"

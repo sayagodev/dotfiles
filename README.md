@@ -241,12 +241,12 @@ Regla al añadir algo nuevo:
 
 1. Detecta el árbol de ML4W (por `active.json`; si falla, siguiendo el
    symlink `~/.config/hypr`) y se detiene con un mensaje claro si no existe.
-2. Crea **19 symlinks** desde `$HOME` al repo:
+2. Crea **20 symlinks** desde `$HOME` al repo:
    `.bash_profile`, `.bashrc_custom`, `.blerc`, `.config/bashrc-custom`,
    `.config/bashrc/custom/00-init`, `.config/hypr/custom.lua`,
    `.config/hypr/scripts/skills-menu.sh`,
    `.config/ml4w/scripts/ml4w-toggle-no-suspend`,
-   `.config/ml4w/wallpapers/shobun.jpg`, `.config/tmux`,
+   `.config/ml4w/wallpapers/shobun.jpg`, `.config/tmux`, `.config/lf`,
    `.config/fcitx5`, `.config/kanata`,
    `.config/environment.d/10-fcitx.conf`,
    `.config/autostart/gpu-screen-recorder-ui.desktop`,
@@ -265,7 +265,7 @@ Regla al añadir algo nuevo:
 
 ### Con flags
 
-- `--packages`: `pacman -S --needed` con los 196 explícitos, los 4 de
+- `--packages`: `pacman -S --needed` con los 199 explícitos, los 4 de
   hardware del host, los 39 de AUR (con `yay` o `paru`) y 6 apps flatpak.
 - `--tools`: `bootstrap/tools.sh` → oh-my-posh **29.36.0** en
   `~/.local/bin` y nvm **v0.40.4** en `~/.nvm`; avisa (sin fallar) de
@@ -314,6 +314,7 @@ overlay/                    espejo de $HOME; se enlaza con symlinks
   .config/ml4w/scripts/     ml4w-toggle-no-suspend
   .config/ml4w/wallpapers/  shobun.jpg (único wallpaper versionado)
   .config/tmux/             tmux.conf + menu
+  .config/lf/               lfrc + previewer/cleaner para kitty
   .config/fcitx5/           chino (pinyin) + perfil
   .config/kanata/           remapeo de teclado
   .config/environment.d/    XMODIFIERS / SDL_IM_MODULE para systemd
@@ -391,6 +392,65 @@ tráelo al repo:
 ./scripts/snapshot.sh            # solo informa
 ./scripts/snapshot.sh --update   # copia a overrides/ y regenera listas
 ```
+
+## Previews en lf (kitty)
+
+`lf` usa el **protocolo gráfico nativo de kitty** (`kitten icat`), no
+ueberzug ni un demonio aparte. La configuración vive en `overlay/.config/lf/`:
+
+| Fichero | Función |
+| --- | --- |
+| `lfrc` | activa el panel, `preload` y define `previewer`/`cleaner` |
+| `preview` | elige cómo pintar cada tipo de fichero |
+| `cleaner` | retira de kitty la imagen anterior antes de repintar |
+
+Qué se ve:
+
+- **Imágenes** (`jpg`, `png`, `gif`, `webp`, `avif`…): la imagen escalada al
+  panel, con transparencia y sin perderla al hacer scroll.
+- **PDF**: primera página rasterizada con `pdftoppm`; si no se puede pintar,
+  metadatos de `pdfinfo`.
+- **Vídeo**: miniatura del 10 % de la duración con `ffmpeg`.
+- **Audio**: portada incrustada si existe; si no, título/artista/álbum,
+  duración y bitrate con `ffprobe`.
+- **Texto y código**: `bat` con colores y números de línea; si no está,
+  `pygmentize` y, como último recurso, `sed`.
+- **Comprimidos** (`zip`, `tar`, `7z`, `rar`…): listado con `bsdtar`.
+- **Fuentes**: familia, estilo y foundry con `fc-scan`.
+- **Binarios**: cabecera con `readelf` o un hexdump corto.
+
+Dependencias: `kitten` (paquete `kitty`), `poppler` (`pdftoppm`,
+`pdfinfo`) y `ffmpeg`. `bat` es recomendable para el texto; sin él se usa
+`pygmentize`. Todas están en `packages/native.txt`; para aplicarlas:
+
+```bash
+./install.sh --only links
+sudo pacman -S --needed bat poppler ffmpeg
+# o todo el listado: ./install.sh --only native
+```
+
+Las miniaturas de PDF/vídeo/SVG/portadas se cachean en
+`~/.cache/lf/preview/` y se limpian solas a los 7 días. No se cachean las
+imágenes originales: `kitten` las lee directamente.
+
+En **tmux** funciona si `allow-passthrough` está activo (ya está en
+`overlay/.config/tmux/tmux.conf`). Kitty recomienda usarlo sin multiplexor:
+dentro de tmux el repintado puede dejar restos al cambiar de pane. Si pasa,
+añade a `lfrc` el redibujado en cada selección:
+
+```
+cmd on-select &{{ exec lf -remote 'send redraw' }}
+```
+
+Comprobación rápida fuera de lf:
+
+```bash
+echo "$KITTY_WINDOW_ID"          # debe tener valor dentro de kitty
+kitten icat ~/Pictures/foto.jpg  # debe pintar la imagen
+```
+
+Si `kitten icat` pinta pero lf no, revisa que `~/.config/lf` sea el symlink
+al repo (`ls -l ~/.config/lf`) y que los scripts tengan permiso `+x`.
 
 ## Actualizar ML4W
 
